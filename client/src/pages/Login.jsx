@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginUser } from '../services/api';
 
@@ -32,6 +32,11 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) navigate('/home', { replace: true });
+  }, [navigate]);
 
   const validate = () => {
     if (!email.trim() || !password.trim()) return 'Por favor completa todos los campos.';
