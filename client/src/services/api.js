@@ -28,6 +28,7 @@ export async function getProductById(id) {
 }
 
 export async function createOrder({ cart, cardHolderName, cardNumber, expirationDate, cvc }) {
+  const user = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
   const payload = {
     cartId: cart.length,
     paymentMethod: 'simulated',
@@ -37,6 +38,7 @@ export async function createOrder({ cart, cardHolderName, cardNumber, expiration
     cvc,
     items: cart,
     total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    userId: user.id || 'anonymous',
   };
   const response = await fetch(`${API_URL}/orders`, {
     method: 'POST',
