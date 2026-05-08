@@ -50,7 +50,18 @@ router.get('/filter', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const product = await Product.findById(req.params.id).lean();
   if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
-  res.json({ product });
+
+  const { sellerName, sellerReputation, ...rest } = product;
+  res.json({
+    product: {
+      ...rest,
+      seller: {
+        id: product._id,
+        fullName: sellerName,
+        reputation: sellerReputation,
+      },
+    },
+  });
 });
 
 module.exports = router;

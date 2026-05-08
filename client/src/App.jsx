@@ -6,6 +6,8 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Success from './pages/Success';
 import Orders from './pages/Orders';
+import Messages from './pages/Messages';
+import SellerProfile from './pages/SellerProfile';
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token');
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
         <Route path="/success" element={<PrivateRoute><Success /></PrivateRoute>} />
         <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
+        <Route path="/messages" element={<PrivateRoute><Messages /></PrivateRoute>} />
+        <Route path="/seller/:id" element={<PrivateRoute><SellerProfile /></PrivateRoute>} />
       </Routes>
     </BrowserRouter>
   );
