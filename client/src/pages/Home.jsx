@@ -79,7 +79,7 @@ export default function Home() {
   });
   const navigate = useNavigate();
 
-  const user = useMemo(() => JSON.parse(localStorage.getItem('user') || '{}'), []);
+  const user = useMemo(() => JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}'), []);
   const displayName = user.fullName
     ? user.fullName.split(' ').slice(0, 2).map((w, i) => i === 1 ? w[0] + '.' : w).join(' ')
     : 'Usuario';
@@ -111,6 +111,7 @@ export default function Home() {
 
   const logout = () => {
     localStorage.clear();
+    sessionStorage.clear();
     navigate('/');
   };
 

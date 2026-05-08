@@ -10,7 +10,7 @@ import Messages from './pages/Messages';
 import SellerProfile from './pages/SellerProfile';
 
 function PrivateRoute({ children }) {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   return token ? children : <Navigate to="/" replace />;
 }
 

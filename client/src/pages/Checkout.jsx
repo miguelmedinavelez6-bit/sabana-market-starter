@@ -1,28 +1,37 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createOrder } from '../services/api';
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const cart = JSON.parse(localStorage.getItem('cart')) || [];
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const [loading, setLoading] = useState(false);
+  const cart = JSON.parse(localStorage.getItem('cart') || '[]');
 
-  const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
+  const [cardHolderName, setCardHolderName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expirationDate, setExpirationDate] = useState('');
+  const [cvc, setCvc] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const subtotal = useMemo(
+    () => cart.reduce((acc, item) => acc + item.price * item.quantity, 0),
+    [cart]
+  );
   const serviceFee = Math.round(subtotal * 0.05);
   const total = subtotal + serviceFee;
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (e) => {
+    e.preventDefault();
+    if (cart.length === 0) return;
+    setError('');
     setLoading(true);
     try {
-      const data = await createOrder({
-        userId: user.id || '1',
-        items: cart,
-        total,
-      });
+      const data = await createOrder({ cart, cardHolderName, cardNumber, expirationDate, cvc });
       localStorage.removeItem('cart');
       localStorage.setItem('lastOrder', JSON.stringify(data.order));
       navigate('/success');
+    } catch (err) {
+      setError(err.message || 'No fue posible procesar la compra');
     } finally {
       setLoading(false);
     }
@@ -30,27 +39,120 @@ export default function Checkout() {
 
   return (
     <div className="page">
+      <Link to="/cart" className="back-link">← Volver al carrito</Link>
+
       <div className="product-layout">
         <section className="card">
-          <h1>Checkout (Simulado)</h1>
-          <p className="warning">Esto es una simulación para la demostración. No ingreses datos reales de tu tarjeta.</p>
-          <div className="form">
-            <label>Nombre en la tarjeta<input defaultValue="Sofía R." /></label>
-            <label>Número de tarjeta<input defaultValue="0000 0000 0000 0000" /></label>
-            <div className="two-columns">
-              <label>Fecha Exp.<input defaultValue="12/28" /></label>
-              <label>CVC<input defaultValue="123" /></label>
+          <h1 className="checkout-title">Pago simulado</h1>
+
+          <div className="checkout-warning">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a4b00" strokeWidth="2" strokeLinecap="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>Esto es una simulación. No ingreses datos reales de tu tarjeta.</span>
+          </div>
+
+          <form onSubmit={handleCheckout} noValidate>
+            <div className="form">
+              <div className="field-group">
+                <label className="field-label" htmlFor="cardHolder">Nombre en la tarjeta</label>
+                <input
+                  id="cardHolder"
+                  className="field-input checkout-plain-input"
+                  value={cardHolderName}
+                  onChange={(e) => setCardHolderName(e.target.value)}
+                  placeholder="Nombre Apellido"
+                  required
+                />
+              </div>
+
+              <div className="field-group">
+                <label className="field-label" htmlFor="cardNumber">Número de tarjeta</label>
+                <input
+                  id="cardNumber"
+                  className="field-input checkout-plain-input"
+                  value={cardNumber}
+                  onChange={(e) => setCardNumber(e.target.value)}
+                  placeholder="0000 0000 0000 0000"
+                  maxLength={19}
+                  required
+                />
+              </div>
+
+              <div className="two-columns">
+                <div className="field-group">
+                  <label className="field-label" htmlFor="expDate">Fecha de expiración</label>
+                  <input
+                    id="expDate"
+                    className="field-input checkout-plain-input"
+                    value={expirationDate}
+                    onChange={(e) => setExpirationDate(e.target.value)}
+                    placeholder="MM/AA"
+                    maxLength={5}
+                    required
+                  />
+                </div>
+                <div className="field-group">
+                  <label className="field-label" htmlFor="cvc">CVC</label>
+                  <input
+                    id="cvc"
+                    className="field-input checkout-plain-input"
+                    value={cvc}
+                    onChange={(e) => setCvc(e.target.value)}
+                    placeholder="123"
+                    maxLength={4}
+                    required
+                  />
+                </div>
+              </div>
+
+              {error && <p className="login-error">{error}</p>}
+            </div>
+          </form>
+        </section>
+
+        <aside className="card summary-card">
+          <h3 className="checkout-summary-title">Resumen de orden</h3>
+
+          <div className="checkout-items">
+            {cart.map((item) => (
+              <div key={item.id} className="checkout-item-row">
+                <span className="checkout-item-name">{item.title}</span>
+                <span className="checkout-item-price">
+                  ${(item.price * item.quantity).toLocaleString('es-CO')}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="checkout-totals">
+            <div className="checkout-total-row">
+              <span>Subtotal</span>
+              <span>${subtotal.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="checkout-total-row muted">
+              <span>Tarifa de servicio (5%)</span>
+              <span>${serviceFee.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="checkout-total-row checkout-total-final">
+              <span>Total a pagar</span>
+              <span>${total.toLocaleString('es-CO')}</span>
             </div>
           </div>
-        </section>
-        <aside className="card summary-card">
-          <h3>Resumen de Orden</h3>
-          <p>Subtotal ({cart.length} items): <strong>${subtotal.toLocaleString('es-CO')}</strong></p>
-          <p>Tarifa de servicio (5%): <strong>${serviceFee.toLocaleString('es-CO')}</strong></p>
-          <p>Total a pagar: <strong>${total.toLocaleString('es-CO')}</strong></p>
-          <button className="primary-button" onClick={handleCheckout} disabled={loading || cart.length === 0}>
+
+          <button
+            className="primary-button checkout-pay-btn"
+            onClick={handleCheckout}
+            disabled={loading || cart.length === 0}
+          >
             {loading ? 'Procesando...' : 'Confirmar y pagar'}
           </button>
+
+          {cart.length === 0 && (
+            <p className="muted checkout-empty-note">Tu carrito está vacío.</p>
+          )}
         </aside>
       </div>
     </div>

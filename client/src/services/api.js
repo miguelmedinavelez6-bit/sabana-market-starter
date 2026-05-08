@@ -27,16 +27,36 @@ export async function getProductById(id) {
   return handleResponse(response);
 }
 
-export async function createOrder(orderData) {
+export async function createOrder({ cart, cardHolderName, cardNumber, expirationDate, cvc }) {
+  const payload = {
+    cartId: cart.length,
+    paymentMethod: 'simulated',
+    cardHolderName,
+    cardNumber,
+    expirationDate,
+    cvc,
+    items: cart,
+    total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  };
   const response = await fetch(`${API_URL}/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(orderData),
+    body: JSON.stringify(payload),
   });
   return handleResponse(response);
 }
 
 export async function getOrdersHistory() {
   const response = await fetch(`${API_URL}/orders/history`);
+  return handleResponse(response);
+}
+
+export async function getOrderConfirmation(id) {
+  const response = await fetch(`${API_URL}/orders/${id}/confirmation`);
+  return handleResponse(response);
+}
+
+export async function getOrderById(id) {
+  const response = await fetch(`${API_URL}/orders/${id}`);
   return handleResponse(response);
 }

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 export default function SellerProfile() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
 
   return (
     <div className="page">
