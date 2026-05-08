@@ -23,6 +23,8 @@ const CONDITIONS = [
   { value: 'digital', label: 'Digital' },
 ];
 
+
+
 function Stars({ value }) {
   const rounded = Math.round(value);
   return (
@@ -68,8 +70,9 @@ export default function Home() {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Todas');
-  const [condition, setCondition] = useState('');
+  const [conditions, setConditions] = useState([]);
   const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
   const [cartCount, setCartCount] = useState(() => {
     const saved = JSON.parse(localStorage.getItem('cart') || '[]');
     return saved.reduce((sum, item) => sum + item.quantity, 0);
@@ -88,10 +91,11 @@ export default function Home() {
   const filtered = useMemo(() => products.filter((p) => {
     if (search && !p.title.toLowerCase().includes(search.toLowerCase()) && !p.category.toLowerCase().includes(search.toLowerCase())) return false;
     if (category !== 'Todas' && p.category !== category) return false;
-    if (condition && p.status !== condition) return false;
+    if (conditions.length > 0 && !conditions.includes(p.status)) return false;
     if (minPrice && p.price < Number(minPrice)) return false;
+    if (maxPrice && p.price > Number(maxPrice)) return false;
     return true;
-  }), [products, search, category, condition, minPrice]);
+  }), [products, search, category, conditions, minPrice, maxPrice]);
 
   const addToCart = (product) => {
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
@@ -202,13 +206,20 @@ export default function Home() {
               <div className="sidebar-section">
                 <p className="sidebar-label">CONDICIÓN</p>
                 {CONDITIONS.map((c) => (
-                  <button
-                    key={c.value}
-                    className={`sidebar-item ${condition === c.value ? 'sidebar-item--active' : ''}`}
-                    onClick={() => setCondition(condition === c.value ? '' : c.value)}
-                  >
+                  <label key={c.value} className="sidebar-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={conditions.includes(c.value)}
+                      onChange={() =>
+                        setConditions((prev) =>
+                          prev.includes(c.value)
+                            ? prev.filter((v) => v !== c.value)
+                            : [...prev, c.value]
+                        )
+                      }
+                    />
                     {c.label}
-                  </button>
+                  </label>
                 ))}
               </div>
 
@@ -222,6 +233,16 @@ export default function Home() {
                     value={minPrice}
                     onChange={(e) => setMinPrice(e.target.value)}
                     placeholder="0"
+                  />
+                </div>
+                <div className="price-filter-row">
+                  <span className="price-filter-label">Hasta:</span>
+                  <input
+                    type="number"
+                    className="price-filter-input"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    placeholder="2000000"
                   />
                 </div>
               </div>

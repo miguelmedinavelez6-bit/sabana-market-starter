@@ -47,8 +47,9 @@ export default function Login() {
     setLoading(true);
     try {
       const data = await loginUser({ institutionalEmail: email, password });
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const storage = remember ? localStorage : sessionStorage;
+      storage.setItem('token', data.token);
+      storage.setItem('user', JSON.stringify(data.user));
       navigate('/home');
     } catch (err) {
       setError(err.message);
