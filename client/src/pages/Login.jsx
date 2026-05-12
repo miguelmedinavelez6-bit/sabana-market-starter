@@ -39,6 +39,19 @@ export default function Login() {
     if (token) navigate('/home', { replace: true });
   }, [navigate]);
 
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, []);
+
   const validate = () => {
     if (!email.trim() || !password.trim()) return 'Por favor completa todos los campos.';
     if (!email.endsWith(INSTITUTIONAL_DOMAIN)) return `El correo debe terminar en ${INSTITUTIONAL_DOMAIN}.`;

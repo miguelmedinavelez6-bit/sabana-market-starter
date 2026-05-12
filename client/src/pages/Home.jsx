@@ -44,22 +44,26 @@ function ProductCard({ product, onAdd }) {
 
   return (
     <article className="product-card-v2">
-      <Link to={`/product/${productId}`} className="pcard-img-wrap">
-        <img src={product.images[0]} alt={product.title} className="pcard-img" />
-        <span className="pcard-cat" style={{ background: cat.bg, color: cat.color }}>
-          {product.category}
-        </span>
-      </Link>
-      <div className="pcard-body">
-        <div className="pcard-meta">
-          <span className="pcard-dot" style={{ background: status.color }} />
-          <span className="pcard-status" style={{ color: status.color }}>{status.label}</span>
-          <Stars value={product.sellerReputation} />
+      <Link to={`/product/${productId}`} className="pcard-link-area">
+        <div className="pcard-img-wrap">
+          <img src={product.images[0]} alt={product.title} className="pcard-img" />
+          <span className="pcard-cat" style={{ background: cat.bg, color: cat.color }}>
+            {product.category}
+          </span>
         </div>
-        <h3 className="pcard-title">{product.title}</h3>
-        <p className="pcard-price">${product.price.toLocaleString('es-CO')}</p>
-        <p className="pcard-seller">A. {product.sellerName || product.seller}</p>
-        <button className="pcard-add-btn" onClick={() => onAdd(product)}>
+        <div className="pcard-body">
+          <div className="pcard-meta">
+            <span className="pcard-dot" style={{ background: status.color }} />
+            <span className="pcard-status" style={{ color: status.color }}>{status.label}</span>
+            <Stars value={product.sellerReputation} />
+          </div>
+          <h3 className="pcard-title">{product.title}</h3>
+          <p className="pcard-price">${product.price.toLocaleString('es-CO')}</p>
+          <p className="pcard-seller">A. {product.sellerName || product.seller}</p>
+        </div>
+      </Link>
+      <div className="pcard-actions">
+        <button type="button" className="pcard-add-btn" onClick={() => onAdd(product)}>
           Agregar al carrito
         </button>
       </div>
@@ -326,7 +330,6 @@ export default function Home() {
             </p>
             {roleMessage && <p className="hero-role-note hero-role-note--success">{roleMessage}</p>}
             {roleError && <p className="hero-role-note hero-role-note--error">{roleError}</p>}
-            {cartFeedback && <p className="hero-role-note hero-role-note--success">{cartFeedback}</p>}
           </div>
         </section>
 
@@ -472,6 +475,12 @@ export default function Home() {
           </main>
         </div>
       </div>
+
+      {cartFeedback && (
+        <div className="floating-toast" role="status" aria-live="polite">
+          {cartFeedback}
+        </div>
+      )}
     </div>
   );
 }

@@ -139,13 +139,15 @@ button, input { font: inherit; }
 
 /* ===== LOGIN ===== */
 .login-page {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100svh;
   background: #eef1f7;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
+  overflow: hidden;
 }
 
 .login-brand {
@@ -763,6 +765,14 @@ button, input { font: inherit; }
 
 .product-card-v2:hover { box-shadow: 0 6px 24px rgba(16, 35, 63, 0.13); }
 
+.pcard-link-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  color: inherit;
+  text-decoration: none;
+}
+
 .pcard-img-wrap {
   position: relative;
   display: block;
@@ -847,11 +857,14 @@ button, input { font: inherit; }
 .pcard-seller {
   font-size: 0.8rem;
   color: #9ca3af;
-  margin: 0 0 12px;
+  margin: 0;
+}
+
+.pcard-actions {
+  padding: 0 14px 14px;
 }
 
 .pcard-add-btn {
-  margin-top: auto;
   width: 100%;
   padding: 10px;
   background: white;
@@ -869,6 +882,21 @@ button, input { font: inherit; }
   background: #10233f;
   color: white;
   border-color: #10233f;
+}
+
+.floating-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  max-width: min(360px, calc(100vw - 32px));
+  background: #10233f;
+  color: white;
+  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(16, 35, 63, 0.22);
+  z-index: 140;
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 /* ===== PRODUCT DETAIL ===== */
