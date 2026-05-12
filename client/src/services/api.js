@@ -170,3 +170,26 @@ export async function getOrderById(id) {
   });
   return handleResponse(response);
 }
+
+export async function getMessageThreads() {
+  const response = await fetch(`${API_URL}/messages/threads`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function getMessageThread(productId) {
+  const response = await fetch(`${API_URL}/messages/threads/${productId}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function sendMessage(productId, payload) {
+  const response = await fetch(`${API_URL}/messages/threads/${productId}/messages`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}

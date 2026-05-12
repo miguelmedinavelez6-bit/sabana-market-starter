@@ -6,6 +6,7 @@ const authRoutes = require('./src/routes/authRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const cartRoutes = require('./src/routes/cartRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
+const messageRoutes = require('./src/routes/messageRoutes');
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/messages', messageRoutes);
 
 if (require.main === module) {
   const PORT = process.env.PORT || 8080;
