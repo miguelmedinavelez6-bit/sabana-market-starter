@@ -102,14 +102,23 @@ button, input { font: inherit; }
 .cart-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   margin-bottom: 16px;
 }
+
+.cart-item > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
 .quantity-box {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
 }
 .quantity-box button {
   width: 32px;
@@ -117,6 +126,13 @@ button, input { font: inherit; }
   border-radius: 10px;
   border: none;
   background: #edf2f8;
+}
+
+.quantity-box .link-button {
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+  padding: 0;
 }
 .back-link { display: inline-block; margin-bottom: 16px; }
 .stack { display: grid; gap: 16px; }

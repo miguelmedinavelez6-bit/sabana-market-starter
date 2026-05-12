@@ -52,10 +52,14 @@ export default function Cart() {
   };
 
   const removeItem = async (productId) => {
+    const confirmed = window.confirm('¿Seguro que deseas eliminar este producto del carrito?');
+    if (!confirmed) return;
+
     try {
       const data = await deleteCartItem(productId);
       setCart(data.cart);
       syncCartFromResponse(data.cart);
+      showNotice('Producto eliminado del carrito.');
     } catch (err) {
       const localCart = deleteLocalCartItem(productId);
       setCart(localCart);
@@ -86,7 +90,6 @@ export default function Cart() {
       ) : (
         <div className="product-layout">
           <section>
-            {notice && <p className="warning">{notice}</p>}
             {cart.items.map((item) => (
               <article className="card cart-item" key={item.productId}>
                 <div>
@@ -110,6 +113,12 @@ export default function Cart() {
             <p>Total a pagar: <strong>${cart.total.toLocaleString('es-CO')}</strong></p>
             <button className="primary-button" onClick={() => navigate('/checkout')}>Proceder al pago</button>
           </aside>
+        </div>
+      )}
+
+      {notice && (
+        <div className="floating-toast floating-toast--cart" role="status" aria-live="polite">
+          {notice}
         </div>
       )}
     </div>

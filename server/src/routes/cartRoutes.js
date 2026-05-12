@@ -43,7 +43,8 @@ async function findOrCreateCart(userId) {
   return cart;
 }
 
-router.use(authMiddleware, requireRoles(['buyer']));
+// Admins can also browse/buy as buyers in the marketplace.
+router.use(authMiddleware, requireRoles(['buyer', 'admin']));
 
 router.get('/', async (req, res) => {
   try {
