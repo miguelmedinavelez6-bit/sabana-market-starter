@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginUser } from '../services/api';
+import { getStoredToken, saveAuthSession } from '../utils/auth';
 
 const INSTITUTIONAL_DOMAIN = '@unisabana.edu.co';
 
@@ -34,7 +35,7 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const token = getStoredToken();
     if (token) navigate('/home', { replace: true });
   }, [navigate]);
 
@@ -52,9 +53,7 @@ export default function Login() {
     setLoading(true);
     try {
       const data = await loginUser({ institutionalEmail: email, password });
-      const storage = remember ? localStorage : sessionStorage;
-      storage.setItem('token', data.token);
-      storage.setItem('user', JSON.stringify(data.user));
+      saveAuthSession(data, remember);
       navigate('/home');
     } catch (err) {
       setError(err.message);

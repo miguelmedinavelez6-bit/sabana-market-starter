@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createOrder } from '../services/api';
+import { createOrder, getCart } from '../services/api';
+import { clearStoredCart, syncCartFromResponse } from '../utils/cart';
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+  const [cart, setCart] = useState({ items: [], subtotal: 0, serviceFee: 0, total: 0 });
+  const [cartLoading, setCartLoading] = useState(true);
 
   const [cardHolderName, setCardHolderName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
@@ -13,21 +15,24 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const subtotal = useMemo(
-    () => cart.reduce((acc, item) => acc + item.price * item.quantity, 0),
-    [cart]
-  );
-  const serviceFee = Math.round(subtotal * 0.05);
-  const total = subtotal + serviceFee;
+  useEffect(() => {
+    getCart()
+      .then((data) => {
+        setCart(data.cart);
+        syncCartFromResponse(data.cart);
+      })
+      .catch((err) => setError(err.message || 'No fue posible cargar el carrito'))
+      .finally(() => setCartLoading(false));
+  }, []);
 
   const handleCheckout = async (e) => {
     e.preventDefault();
-    if (cart.length === 0) return;
+    if (cart.items.length === 0) return;
     setError('');
     setLoading(true);
     try {
       const data = await createOrder({ cart, cardHolderName, cardNumber, expirationDate, cvc });
-      localStorage.removeItem('cart');
+      clearStoredCart();
       localStorage.setItem('lastOrder', JSON.stringify(data.order));
       navigate('/success');
     } catch (err) {
@@ -116,41 +121,45 @@ export default function Checkout() {
         <aside className="card summary-card">
           <h3 className="checkout-summary-title">Resumen de orden</h3>
 
-          <div className="checkout-items">
-            {cart.map((item) => (
-              <div key={item.id} className="checkout-item-row">
-                <span className="checkout-item-name">{item.title}</span>
-                <span className="checkout-item-price">
-                  ${(item.price * item.quantity).toLocaleString('es-CO')}
-                </span>
-              </div>
-            ))}
-          </div>
+          {cartLoading ? (
+            <p className="muted">Cargando carrito...</p>
+          ) : (
+            <div className="checkout-items">
+              {cart.items.map((item) => (
+                <div key={item.productId} className="checkout-item-row">
+                  <span className="checkout-item-name">{item.title}</span>
+                  <span className="checkout-item-price">
+                    ${(item.price * item.quantity).toLocaleString('es-CO')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="checkout-totals">
             <div className="checkout-total-row">
               <span>Subtotal</span>
-              <span>${subtotal.toLocaleString('es-CO')}</span>
+              <span>${cart.subtotal.toLocaleString('es-CO')}</span>
             </div>
             <div className="checkout-total-row muted">
               <span>Tarifa de servicio (5%)</span>
-              <span>${serviceFee.toLocaleString('es-CO')}</span>
+              <span>${cart.serviceFee.toLocaleString('es-CO')}</span>
             </div>
             <div className="checkout-total-row checkout-total-final">
               <span>Total a pagar</span>
-              <span>${total.toLocaleString('es-CO')}</span>
+              <span>${cart.total.toLocaleString('es-CO')}</span>
             </div>
           </div>
 
           <button
             className="primary-button checkout-pay-btn"
             onClick={handleCheckout}
-            disabled={loading || cart.length === 0}
+            disabled={loading || cartLoading || cart.items.length === 0}
           >
             {loading ? 'Procesando...' : 'Confirmar y pagar'}
           </button>
 
-          {cart.length === 0 && (
+          {!cartLoading && cart.items.length === 0 && (
             <p className="muted checkout-empty-note">Tu carrito está vacío.</p>
           )}
         </aside>

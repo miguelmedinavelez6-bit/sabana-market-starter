@@ -8,9 +8,20 @@ import Success from './pages/Success';
 import Orders from './pages/Orders';
 import Messages from './pages/Messages';
 import SellerProfile from './pages/SellerProfile';
+import { getStoredToken, getStoredUser, hasRoleAccess } from './utils/auth';
 
-function PrivateRoute({ children }) {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+function PrivateRoute({ children, allowedRoles = [] }) {
+  const token = getStoredToken();
+  const user = getStoredUser();
+
+  if (!token) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!hasRoleAccess(user.role, allowedRoles)) {
+    return <Navigate to="/home" replace />;
+  }
+
   return token ? children : <Navigate to="/" replace />;
 }
 

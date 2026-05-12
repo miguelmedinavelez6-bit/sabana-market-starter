@@ -13,4 +13,29 @@ function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = authMiddleware;
+function hasRoleAccess(userRole, allowedRoles = []) {
+  if (!allowedRoles.length) return true;
+  if (allowedRoles.includes(userRole)) return true;
+  if (userRole === 'seller' && allowedRoles.includes('buyer')) return true;
+  return false;
+}
+
+function requireRoles(allowedRoles = []) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'No autorizado' });
+    }
+
+    if (!hasRoleAccess(req.user.role, allowedRoles)) {
+      return res.status(403).json({ message: 'No tienes permisos para realizar esta acción' });
+    }
+
+    next();
+  };
+}
+
+module.exports = {
+  authMiddleware,
+  hasRoleAccess,
+  requireRoles,
+};

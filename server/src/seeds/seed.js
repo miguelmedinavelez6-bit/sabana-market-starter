@@ -11,6 +11,18 @@ const users = [
     password: '123456',
     role: 'buyer',
   },
+  {
+    fullName: 'Mateo Pérez',
+    institutionalEmail: 'mateo.perez@unisabana.edu.co',
+    password: '123456',
+    role: 'seller',
+  },
+  {
+    fullName: 'Admin Sabana',
+    institutionalEmail: 'admin.market@unisabana.edu.co',
+    password: '123456',
+    role: 'admin',
+  },
 ];
 
 const products = [

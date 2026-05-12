@@ -1,25 +1,47 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { deleteCartItem, getCart, updateCartItem } from '../services/api';
+import { syncCartFromResponse } from '../utils/cart';
 
 export default function Cart() {
   const navigate = useNavigate();
-  const [cart, setCart] = useState(JSON.parse(localStorage.getItem('cart')) || []);
+  const [cart, setCart] = useState({ items: [], subtotal: 0, serviceFee: 0, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
-  const serviceFee = Math.round(subtotal * 0.05);
-  const total = subtotal + serviceFee;
+  useEffect(() => {
+    getCart()
+      .then((data) => {
+        setCart(data.cart);
+        syncCartFromResponse(data.cart);
+      })
+      .catch((err) => setError(err.message || 'No fue posible cargar el carrito'))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const updateQuantity = (id, delta) => {
-    const next = cart
-      .map((item) => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item);
-    setCart(next);
-    localStorage.setItem('cart', JSON.stringify(next));
+  const updateQuantity = async (productId, delta) => {
+    const currentItem = cart.items.find((item) => item.productId === productId);
+    if (!currentItem) return;
+
+    const nextQuantity = Math.max(1, currentItem.quantity + delta);
+
+    try {
+      const data = await updateCartItem(productId, nextQuantity);
+      setCart(data.cart);
+      syncCartFromResponse(data.cart);
+    } catch (err) {
+      setError(err.message || 'No fue posible actualizar el carrito');
+    }
   };
 
-  const removeItem = (id) => {
-    const next = cart.filter((item) => item.id !== id);
-    setCart(next);
-    localStorage.setItem('cart', JSON.stringify(next));
+  const removeItem = async (productId) => {
+    try {
+      const data = await deleteCartItem(productId);
+      setCart(data.cart);
+      syncCartFromResponse(data.cart);
+    } catch (err) {
+      setError(err.message || 'No fue posible eliminar el producto');
+    }
   };
 
   return (
@@ -29,7 +51,15 @@ export default function Cart() {
         <Link to="/home">Volver al inicio</Link>
       </header>
 
-      {cart.length === 0 ? (
+      {loading ? (
+        <div className="card products-feedback">
+          <p className="muted">Cargando carrito...</p>
+        </div>
+      ) : error ? (
+        <div className="card products-feedback">
+          <p className="login-error">{error}</p>
+        </div>
+      ) : cart.items.length === 0 ? (
         <div className="card">
           <p>Tu carrito está vacío.</p>
           <Link className="primary-button inline-button" to="/home">Explorar productos</Link>
@@ -37,27 +67,27 @@ export default function Cart() {
       ) : (
         <div className="product-layout">
           <section>
-            {cart.map((item) => (
-              <article className="card cart-item" key={item.id}>
+            {cart.items.map((item) => (
+              <article className="card cart-item" key={item.productId}>
                 <div>
                   <h3>{item.title}</h3>
                   <p className="muted">Vendido por: {item.sellerName}</p>
                   <p className="price">${item.price.toLocaleString('es-CO')}</p>
                 </div>
                 <div className="quantity-box">
-                  <button onClick={() => updateQuantity(item.id, -1)}>-</button>
+                  <button onClick={() => updateQuantity(item.productId, -1)}>-</button>
                   <span>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, 1)}>+</button>
-                  <button className="link-button" onClick={() => removeItem(item.id)}>Eliminar</button>
+                  <button onClick={() => updateQuantity(item.productId, 1)}>+</button>
+                  <button className="link-button" onClick={() => removeItem(item.productId)}>Eliminar</button>
                 </div>
               </article>
             ))}
           </section>
           <aside className="card summary-card">
             <h3>Resumen de Orden</h3>
-            <p>Subtotal ({cart.length} items): <strong>${subtotal.toLocaleString('es-CO')}</strong></p>
-            <p>Tarifa de servicio (5%): <strong>${serviceFee.toLocaleString('es-CO')}</strong></p>
-            <p>Total a pagar: <strong>${total.toLocaleString('es-CO')}</strong></p>
+            <p>Subtotal ({cart.items.length} items): <strong>${cart.subtotal.toLocaleString('es-CO')}</strong></p>
+            <p>Tarifa de servicio (5%): <strong>${cart.serviceFee.toLocaleString('es-CO')}</strong></p>
+            <p>Total a pagar: <strong>${cart.total.toLocaleString('es-CO')}</strong></p>
             <button className="primary-button" onClick={() => navigate('/checkout')}>Proceder al pago</button>
           </aside>
         </div>

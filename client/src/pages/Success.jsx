@@ -29,6 +29,28 @@ export default function Success() {
 
   const status = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
 
+  if (!loading && !order?.id) {
+    return (
+      <div className="page center-page">
+        <div className="success-card card">
+          <h1 className="success-title">No encontramos una compra reciente</h1>
+          <p className="success-message">
+            Puedes revisar tus pedidos o volver al inicio para seguir explorando productos.
+          </p>
+
+          <div className="success-actions">
+            <Link className="primary-button inline-button" to="/orders">
+              Ver Mis Pedidos
+            </Link>
+            <Link className="secondary-button inline-button" to="/home">
+              Volver al inicio
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="page center-page">

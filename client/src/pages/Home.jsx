@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getProducts } from '../services/api';
+import { addCartItem, becomeSeller, getCart, getMarketplaceProducts } from '../services/api';
+import { getRoleLabel, getStoredUser, saveAuthSession } from '../utils/auth';
+import { getStoredCartCount, syncCartFromResponse } from '../utils/cart';
 
 const CATEGORY_COLORS = {
   'Electrónica': { bg: '#dbeafe', color: '#1d4ed8' },
@@ -23,8 +25,6 @@ const CONDITIONS = [
   { value: 'digital', label: 'Digital' },
 ];
 
-
-
 function Stars({ value }) {
   const rounded = Math.round(value);
   return (
@@ -40,10 +40,11 @@ function Stars({ value }) {
 function ProductCard({ product, onAdd }) {
   const cat = CATEGORY_COLORS[product.category] || { bg: '#f3f4f6', color: '#6b7280' };
   const status = STATUS_MAP[product.status] || { label: product.statusLabel, color: '#6b7280' };
+  const productId = product.id || product._id;
 
   return (
     <article className="product-card-v2">
-      <Link to={`/product/${product.id}`} className="pcard-img-wrap">
+      <Link to={`/product/${productId}`} className="pcard-img-wrap">
         <img src={product.images[0]} alt={product.title} className="pcard-img" />
         <span className="pcard-cat" style={{ background: cat.bg, color: cat.color }}>
           {product.category}
@@ -57,7 +58,7 @@ function ProductCard({ product, onAdd }) {
         </div>
         <h3 className="pcard-title">{product.title}</h3>
         <p className="pcard-price">${product.price.toLocaleString('es-CO')}</p>
-        <p className="pcard-seller">A. {product.sellerName}</p>
+        <p className="pcard-seller">A. {product.sellerName || product.seller}</p>
         <button className="pcard-add-btn" onClick={() => onAdd(product)}>
           Agregar al carrito
         </button>
@@ -73,40 +74,102 @@ export default function Home() {
   const [conditions, setConditions] = useState([]);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
-  const [cartCount, setCartCount] = useState(() => {
-    const saved = JSON.parse(localStorage.getItem('cart') || '[]');
-    return saved.reduce((sum, item) => sum + item.quantity, 0);
-  });
+  const [sort, setSort] = useState('relevance');
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productsError, setProductsError] = useState('');
+  const [user, setUser] = useState(getStoredUser());
+  const [roleMessage, setRoleMessage] = useState('');
+  const [roleError, setRoleError] = useState('');
+  const [cartFeedback, setCartFeedback] = useState('');
+  const [upgradingRole, setUpgradingRole] = useState(false);
+  const [cartCount, setCartCount] = useState(() => getStoredCartCount());
   const navigate = useNavigate();
 
-  const user = useMemo(() => JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}'), []);
   const displayName = user.fullName
     ? user.fullName.split(' ').slice(0, 2).map((w, i) => i === 1 ? w[0] + '.' : w).join(' ')
     : 'Usuario';
 
+  const conditionsKey = useMemo(() => conditions.slice().sort().join(','), [conditions]);
+  const hasSearch = search.trim() !== '';
+  const hasActiveFilters = category !== 'Todas' || conditions.length > 0 || minPrice !== '' || maxPrice !== '';
+
   useEffect(() => {
-    getProducts().then((data) => setProducts(data.products || []));
+    setPage(1);
+  }, [search, category, conditionsKey, minPrice, maxPrice, sort]);
+
+  useEffect(() => {
+    getCart()
+      .then((data) => {
+        const items = syncCartFromResponse(data.cart);
+        setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
+      })
+      .catch(() => {});
   }, []);
 
-  const filtered = useMemo(() => products.filter((p) => {
-    if (search && !p.title.toLowerCase().includes(search.toLowerCase()) && !p.category.toLowerCase().includes(search.toLowerCase())) return false;
-    if (category !== 'Todas' && p.category !== category) return false;
-    if (conditions.length > 0 && !conditions.includes(p.status)) return false;
-    if (minPrice && p.price < Number(minPrice)) return false;
-    if (maxPrice && p.price > Number(maxPrice)) return false;
-    return true;
-  }), [products, search, category, conditions, minPrice, maxPrice]);
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      setLoadingProducts(true);
+      setProductsError('');
 
-  const addToCart = (product) => {
-    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    const idx = cart.findIndex((i) => i.id === product.id);
-    if (idx >= 0) {
-      cart[idx].quantity += 1;
-    } else {
-      cart.push({ ...product, quantity: 1 });
+      try {
+        const data = await getMarketplaceProducts({
+          page,
+          limit: 10,
+          q: search,
+          category,
+          status: conditions,
+          minPrice,
+          maxPrice,
+          sort,
+        });
+
+        setProducts(data.products || []);
+        setTotal(data.total || 0);
+        setPages(data.pages || 1);
+      } catch (err) {
+        setProducts([]);
+        setTotal(0);
+        setPages(1);
+        setProductsError(err.message || 'No fue posible cargar los productos');
+      } finally {
+        setLoadingProducts(false);
+      }
+    }, search.trim() ? 250 : 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [page, search, category, conditions, minPrice, maxPrice, sort]);
+
+  const addToCart = async (product) => {
+    const productId = product.id || product._id;
+    try {
+      const data = await addCartItem(productId, 1);
+      const items = syncCartFromResponse(data.cart);
+      setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
+      setCartFeedback(`${product.title} se agregó al carrito`);
+      setTimeout(() => setCartFeedback(''), 2200);
+    } catch (err) {
+      setCartFeedback(err.message || 'No fue posible agregar el producto al carrito');
+      setTimeout(() => setCartFeedback(''), 2600);
     }
-    localStorage.setItem('cart', JSON.stringify(cart));
-    setCartCount(cart.reduce((sum, i) => sum + i.quantity, 0));
+  };
+
+  const handleBecomeSeller = async () => {
+    setRoleError('');
+    setRoleMessage('');
+    setUpgradingRole(true);
+    try {
+      const data = await becomeSeller();
+      saveAuthSession(data);
+      setUser(data.user);
+      setRoleMessage(data.message);
+    } catch (err) {
+      setRoleError(err.message || 'No fue posible activar el perfil de vendedor');
+    } finally {
+      setUpgradingRole(false);
+    }
   };
 
   const logout = () => {
@@ -114,6 +177,21 @@ export default function Home() {
     sessionStorage.clear();
     navigate('/');
   };
+
+  const clearFilters = () => {
+    setSearch('');
+    setCategory('Todas');
+    setConditions([]);
+    setMinPrice('');
+    setMaxPrice('');
+    setSort('relevance');
+  };
+
+  const resultLabel = search.trim()
+    ? `"${search.trim()}"`
+    : category !== 'Todas'
+      ? `"${category}"`
+      : 'todos los productos';
 
   return (
     <div className="home-root">
@@ -161,7 +239,10 @@ export default function Home() {
           </Link>
           <button className="user-pill" onClick={logout}>
             <span className="user-avatar-nav">{displayName[0]}</span>
-            {displayName}
+            <span>
+              {displayName}
+              <span className="user-role-label">{getRoleLabel(user.role)}</span>
+            </span>
           </button>
         </div>
       </nav>
@@ -173,7 +254,29 @@ export default function Home() {
             <p className="hero-sub">
               Compra, vende e intercambia libros, apuntes y más con otros estudiantes en tu campus.
             </p>
-            <button className="hero-cta">Ver ofertas del mes</button>
+            <div className="button-row">
+              <button className="hero-cta" type="button">
+                Ver ofertas del mes
+              </button>
+              {user.role === 'buyer' && (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={handleBecomeSeller}
+                  disabled={upgradingRole}
+                >
+                  {upgradingRole ? 'Activando perfil...' : 'Activar perfil vendedor'}
+                </button>
+              )}
+            </div>
+            <p className="hero-role-note">
+              Rol actual: <strong>{getRoleLabel(user.role)}</strong>
+              {user.role === 'seller' && ' · Como vendedor también conservas todas las funciones de comprador.'}
+              {user.role === 'admin' && ' · Tu cuenta tiene permisos administrativos institucionales.'}
+            </p>
+            {roleMessage && <p className="hero-role-note hero-role-note--success">{roleMessage}</p>}
+            {roleError && <p className="hero-role-note hero-role-note--error">{roleError}</p>}
+            {cartFeedback && <p className="hero-role-note hero-role-note--success">{cartFeedback}</p>}
           </div>
         </section>
 
@@ -247,27 +350,75 @@ export default function Home() {
                   />
                 </div>
               </div>
+
+              {(hasSearch || hasActiveFilters) && (
+                <button type="button" className="secondary-button sidebar-clear-btn" onClick={clearFilters}>
+                  Limpiar filtros
+                </button>
+              )}
             </div>
           </aside>
 
           <main>
             <div className="results-header">
               <p className="results-text">
-                Resultados para <strong>"{category}"</strong>
-                <span className="results-count"> ({filtered.length} encontrados)</span>
+                Resultados para <strong>{resultLabel}</strong>
+                <span className="results-count"> ({total} encontrados)</span>
               </p>
-              <select className="sort-select">
-                <option>Ordenar por: Relevancia</option>
-                <option>Precio: menor a mayor</option>
-                <option>Precio: mayor a menor</option>
+              <select
+                className="sort-select"
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+              >
+                <option value="relevance">Ordenar por: Relevancia</option>
+                <option value="price_asc">Precio: menor a mayor</option>
+                <option value="price_desc">Precio: mayor a menor</option>
               </select>
             </div>
 
-            <div className="products-grid">
-              {filtered.map((product) => (
-                <ProductCard key={product.id} product={product} onAdd={addToCart} />
-              ))}
-            </div>
+            {loadingProducts ? (
+              <div className="card products-feedback">
+                <p className="muted">Cargando productos...</p>
+              </div>
+            ) : productsError ? (
+              <div className="card products-feedback">
+                <p className="login-error">{productsError}</p>
+              </div>
+            ) : products.length === 0 ? (
+              <div className="card products-feedback">
+                <p>No encontramos productos con esos filtros.</p>
+              </div>
+            ) : (
+              <>
+                <div className="products-grid">
+                  {products.map((product) => (
+                    <ProductCard key={product.id || product._id} product={product} onAdd={addToCart} />
+                  ))}
+                </div>
+
+                {pages > 1 && (
+                  <div className="pagination-row">
+                    <button
+                      type="button"
+                      className="secondary-button small-button"
+                      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                      disabled={page === 1}
+                    >
+                      Anterior
+                    </button>
+                    <span className="pagination-label">Página {page} de {pages}</span>
+                    <button
+                      type="button"
+                      className="secondary-button small-button"
+                      onClick={() => setPage((prev) => Math.min(pages, prev + 1))}
+                      disabled={page === pages}
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </main>
         </div>
       </div>

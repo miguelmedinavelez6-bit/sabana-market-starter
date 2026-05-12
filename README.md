@@ -28,6 +28,11 @@ npm run dev
 ## Credenciales demo
 - Correo: `sofia.rodriguez@unisabana.edu.co`
 - Contraseña: `123456`
+- Rol: `buyer`
+
+Credenciales adicionales después de correr el seed:
+- `mateo.perez@unisabana.edu.co` / `123456` — `seller`
+- `admin.market@unisabana.edu.co` / `123456` — `admin`
 
 ## Rutas principales
 - `/` login

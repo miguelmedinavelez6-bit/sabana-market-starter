@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getOrdersHistory } from '../services/api';
+import { getOrderById, getOrdersHistory } from '../services/api';
 
 const STATUS_CONFIG = {
   pending:    { label: 'Pendiente',   color: '#b45309', bg: '#fef3c7' },
@@ -16,6 +16,22 @@ const TRACKING_LABELS = {
   processing: 'En camino',
   delivered:  'Entregado',
 };
+
+const REVIEW_STORAGE_KEY = 'sabana_order_reviews';
+
+function loadSavedReviews() {
+  try {
+    return JSON.parse(localStorage.getItem(REVIEW_STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveReview(orderId, review) {
+  const reviews = loadSavedReviews();
+  reviews[orderId] = review;
+  localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviews));
+}
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
@@ -55,14 +71,16 @@ function TrackingTimeline({ status }) {
 }
 
 function ReviewForm({ orderId, onClose }) {
-  const [rating, setRating] = useState(0);
+  const savedReview = loadSavedReviews()[orderId];
+  const [rating, setRating] = useState(savedReview?.rating || 0);
   const [hovered, setHovered] = useState(0);
-  const [comment, setComment] = useState('');
-  const [submitted, setSubmitted] = useState(false);
+  const [comment, setComment] = useState(savedReview?.comment || '');
+  const [submitted, setSubmitted] = useState(Boolean(savedReview));
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!rating) return;
+    saveReview(orderId, { rating, comment, submittedAt: Date.now() });
     setSubmitted(true);
   };
 
@@ -117,10 +135,36 @@ function ReviewForm({ orderId, onClose }) {
 function OrderCard({ order }) {
   const [showTracking, setShowTracking] = useState(false);
   const [showReview, setShowReview] = useState(false);
+  const [trackingOrder, setTrackingOrder] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState('');
 
   const seller = order.items?.[0]?.sellerName || 'Vendedor';
   const itemCount = order.items?.length || 0;
   const firstItems = order.items?.slice(0, 2) || [];
+  const orderStatus = trackingOrder?.status || order.status;
+
+  const handleToggleTracking = async () => {
+    if (showTracking) {
+      setShowTracking(false);
+      return;
+    }
+
+    setShowReview(false);
+    setTrackingLoading(true);
+    setTrackingError('');
+
+    try {
+      const data = await getOrderById(order.id);
+      setTrackingOrder(data.order);
+      setShowTracking(true);
+    } catch (err) {
+      setTrackingError(err.message || 'No fue posible consultar el seguimiento del pedido');
+      setShowTracking(true);
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
 
   return (
     <article className="card order-card">
@@ -133,7 +177,7 @@ function OrderCard({ order }) {
             })}
           </p>
         </div>
-        <StatusBadge status={order.status} />
+        <StatusBadge status={orderStatus} />
       </div>
 
       <div className="order-card-body">
@@ -146,7 +190,7 @@ function OrderCard({ order }) {
 
         <div className="order-items-list">
           {firstItems.map((item) => (
-            <div key={item.id} className="order-item-row">
+            <div key={item.productId || item.id || item.title} className="order-item-row">
               <span className="order-item-name">{item.title}</span>
               <span className="order-item-qty">x{item.quantity}</span>
             </div>
@@ -165,12 +209,12 @@ function OrderCard({ order }) {
       <div className="order-card-footer">
         <button
           className="secondary-button small-button"
-          onClick={() => { setShowTracking((v) => !v); setShowReview(false); }}
+          onClick={handleToggleTracking}
         >
           {showTracking ? 'Ocultar seguimiento' : 'Rastrear pedido'}
         </button>
 
-        {order.status === 'delivered' && !showReview && (
+        {orderStatus === 'delivered' && !showReview && (
           <button
             className="primary-button small-button"
             onClick={() => { setShowReview(true); setShowTracking(false); }}
@@ -182,7 +226,13 @@ function OrderCard({ order }) {
 
       {showTracking && (
         <div className="order-tracking-panel">
-          <TrackingTimeline status={order.status} />
+          {trackingLoading ? (
+            <p className="muted">Consultando seguimiento...</p>
+          ) : trackingError ? (
+            <p className="login-error">{trackingError}</p>
+          ) : (
+            <TrackingTimeline status={orderStatus} />
+          )}
         </div>
       )}
 
@@ -198,10 +248,12 @@ function OrderCard({ order }) {
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     getOrdersHistory()
       .then((data) => setOrders(data.orders || []))
+      .catch((err) => setError(err.message || 'No fue posible cargar tus pedidos'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -218,6 +270,10 @@ export default function Orders() {
 
       {loading ? (
         <p className="muted">Cargando pedidos...</p>
+      ) : error ? (
+        <div className="card products-feedback">
+          <p className="login-error">{error}</p>
+        </div>
       ) : orders.length === 0 ? (
         <div className="card orders-empty">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round">

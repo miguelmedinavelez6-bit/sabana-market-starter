@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getProductById } from '../services/api';
+import { addCartItem, getProductById } from '../services/api';
+import { syncCartFromResponse } from '../utils/cart';
 
 const CATEGORY_COLORS = {
   'Electrónica': { bg: '#dbeafe', color: '#1d4ed8' },
@@ -25,29 +26,59 @@ function Stars({ value }) {
 export default function ProductDetail() {
   const { id } = useParams();
   const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [cartMessage, setCartMessage] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    getProductById(id).then((data) => setProduct(data.product));
+    setLoading(true);
+    setError('');
+
+    getProductById(id)
+      .then((data) => setProduct(data.product))
+      .catch((err) => {
+        setProduct(null);
+        setError(err.message || 'No fue posible cargar el producto');
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
-  const addToCart = () => {
-    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    const idx = cart.findIndex((item) => item.id === product.id || item._id === product._id);
-    if (idx >= 0) {
-      cart[idx].quantity += 1;
-    } else {
-      cart.push({ ...product, quantity: 1 });
+  const addToCart = async () => {
+    try {
+      const data = await addCartItem(product.id || product._id, 1);
+      syncCartFromResponse(data.cart);
+      navigate('/cart');
+    } catch (err) {
+      setCartMessage(err.message || 'No fue posible agregar el producto al carrito');
     }
-    localStorage.setItem('cart', JSON.stringify(cart));
-    navigate('/cart');
   };
 
   const contactSeller = () => {
     navigate('/messages', { state: { product } });
   };
 
-  if (!product) return <div className="page"><p>Cargando...</p></div>;
+  if (loading) {
+    return (
+      <div className="page">
+        <Link to="/home" className="back-link">← Volver al marketplace</Link>
+        <div className="card products-feedback">
+          <p className="muted">Cargando producto...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <div className="page">
+        <Link to="/home" className="back-link">← Volver al marketplace</Link>
+        <div className="card products-feedback">
+          <p className="login-error">{error || 'Producto no encontrado'}</p>
+        </div>
+      </div>
+    );
+  }
 
   const cat = CATEGORY_COLORS[product.category] || { bg: '#f3f4f6', color: '#6b7280' };
   const seller = product.seller || {};
@@ -58,6 +89,16 @@ export default function ProductDetail() {
 
       <div className="product-layout">
         <section className="card">
+          {product.images?.[0] && (
+            <div className="product-detail-media">
+              <img
+                src={product.images[0]}
+                alt={product.title}
+                className="product-detail-image"
+              />
+            </div>
+          )}
+
           <div className="pdetail-badges">
             <span className="pcard-cat" style={{ background: cat.bg, color: cat.color }}>
               {product.category}
@@ -67,12 +108,13 @@ export default function ProductDetail() {
 
           <h1>{product.title}</h1>
           <p className="price">${product.price.toLocaleString('es-CO')}</p>
-          <p>{product.description}</p>
+          <p className="product-detail-description">{product.description}</p>
 
           <div className="button-row">
             <button className="primary-button" onClick={addToCart}>Agregar al carrito</button>
             <button className="secondary-button" onClick={contactSeller}>Contactar al vendedor</button>
           </div>
+          {cartMessage && <p className="login-error">{cartMessage}</p>}
         </section>
 
         <aside className="card seller-card">
@@ -80,7 +122,11 @@ export default function ProductDetail() {
           <p><strong>{seller.fullName}</strong></p>
           <Stars value={seller.reputation} />
           <p className="muted">Miembro desde 2022</p>
-          <Link to={`/seller/${seller.id}`} className="text-link-bold seller-profile-link">
+          <Link
+            to={`/seller/${seller.id}`}
+            state={{ seller }}
+            className="text-link-bold seller-profile-link"
+          >
             Ver perfil completo →
           </Link>
         </aside>
