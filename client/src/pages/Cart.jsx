@@ -10,6 +10,12 @@ export default function Cart() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  const showNotice = (message) => {
+    setNotice(message);
+    window.clearTimeout(showNotice._timer);
+    showNotice._timer = window.setTimeout(() => setNotice(''), 2400);
+  };
+
   useEffect(() => {
     getCart()
       .then((data) => {
@@ -20,7 +26,7 @@ export default function Cart() {
         const localCart = buildLocalCartSnapshot();
         if (localCart.items.length > 0) {
           setCart(localCart);
-          setNotice('La API del carrito no respondió; te mostramos la copia local para que no pierdas tus productos.');
+          showNotice('Te mostramos la copia local del carrito para que no pierdas tus productos.');
         } else {
           setError(err.message || 'No fue posible cargar el carrito');
         }
@@ -41,7 +47,7 @@ export default function Cart() {
     } catch (err) {
       const localCart = updateLocalCartQuantity(productId, nextQuantity);
       setCart(localCart);
-      setNotice('Actualizamos el carrito localmente mientras se recupera la API.');
+      showNotice('Actualizamos la cantidad en tu carrito.');
     }
   };
 
@@ -53,7 +59,7 @@ export default function Cart() {
     } catch (err) {
       const localCart = deleteLocalCartItem(productId);
       setCart(localCart);
-      setNotice('Eliminamos el producto del carrito local porque la API no respondió.');
+      showNotice('Producto eliminado del carrito.');
     }
   };
 
@@ -89,10 +95,10 @@ export default function Cart() {
                   <p className="price">${item.price.toLocaleString('es-CO')}</p>
                 </div>
                 <div className="quantity-box">
-                  <button onClick={() => updateQuantity(item.productId, -1)}>-</button>
+                  <button type="button" onClick={() => updateQuantity(item.productId, -1)}>-</button>
                   <span>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.productId, 1)}>+</button>
-                  <button className="link-button" onClick={() => removeItem(item.productId)}>Eliminar</button>
+                  <button type="button" onClick={() => updateQuantity(item.productId, 1)}>+</button>
+                  <button type="button" className="link-button" onClick={() => removeItem(item.productId)}>Eliminar</button>
                 </div>
               </article>
             ))}
