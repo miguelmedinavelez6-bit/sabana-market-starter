@@ -3,7 +3,21 @@ import { getAuthHeaders } from '../utils/auth';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 async function handleResponse(response) {
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  let data;
+
+  if (contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    const text = await response.text();
+    const looksLikeHtml = text.trim().startsWith('<');
+    throw new Error(
+      looksLikeHtml
+        ? 'La API devolvió HTML en lugar de JSON. Revisa el despliegue del backend o la variable VITE_API_URL.'
+        : text || 'Request failed'
+    );
+  }
+
   if (!response.ok) {
     throw new Error(data.message || 'Request failed');
   }
@@ -120,12 +134,13 @@ export async function clearCart() {
 
 export async function createOrder({ cart, cardHolderName, cardNumber, expirationDate, cvc }) {
   const payload = {
-    cartId: cart.id,
+    cartId: cart.id || undefined,
     paymentMethod: 'simulated',
     cardHolderName,
     cardNumber,
     expirationDate,
     cvc,
+    items: cart.items,
   };
   const response = await fetch(`${API_URL}/orders`, {
     method: 'POST',

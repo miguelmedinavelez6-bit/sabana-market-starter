@@ -8,6 +8,7 @@ import Success from './pages/Success';
 import Orders from './pages/Orders';
 import Messages from './pages/Messages';
 import SellerProfile from './pages/SellerProfile';
+import Profile from './pages/Profile';
 import { getStoredToken, getStoredUser, hasRoleAccess } from './utils/auth';
 
 function PrivateRoute({ children, allowedRoles = [] }) {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/success" element={<PrivateRoute><Success /></PrivateRoute>} />
         <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
         <Route path="/messages" element={<PrivateRoute><Messages /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/seller/:id" element={<PrivateRoute><SellerProfile /></PrivateRoute>} />
       </Routes>
     </BrowserRouter>

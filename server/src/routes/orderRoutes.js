@@ -21,10 +21,11 @@ router.post('/', authMiddleware, async (req, res) => {
 
     if (cartId) {
       const cart = await Cart.findOne({ _id: cartId, userId: String(req.user.id) }).lean();
-      if (!cart || !Array.isArray(cart.items) || cart.items.length === 0) {
+      if (cart && Array.isArray(cart.items) && cart.items.length > 0) {
+        checkoutItems = cart.items;
+      } else if (!Array.isArray(checkoutItems) || checkoutItems.length === 0) {
         return res.status(400).json({ message: 'No fue posible procesar la compra' });
       }
-      checkoutItems = cart.items;
     }
 
     if (!Array.isArray(checkoutItems) || checkoutItems.length === 0) {

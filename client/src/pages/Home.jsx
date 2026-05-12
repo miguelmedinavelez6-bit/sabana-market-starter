@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { addCartItem, becomeSeller, getCart, getMarketplaceProducts } from '../services/api';
 import { getRoleLabel, getStoredUser, saveAuthSession } from '../utils/auth';
-import { getStoredCartCount, syncCartFromResponse } from '../utils/cart';
+import { addLocalCartItem, getStoredCartCount, syncCartFromResponse } from '../utils/cart';
 
 const CATEGORY_COLORS = {
   'Electrónica': { bg: '#dbeafe', color: '#1d4ed8' },
@@ -84,9 +84,11 @@ export default function Home() {
   const [roleMessage, setRoleMessage] = useState('');
   const [roleError, setRoleError] = useState('');
   const [cartFeedback, setCartFeedback] = useState('');
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [upgradingRole, setUpgradingRole] = useState(false);
   const [cartCount, setCartCount] = useState(() => getStoredCartCount());
   const navigate = useNavigate();
+  const profileMenuRef = useRef(null);
 
   const displayName = user.fullName
     ? user.fullName.split(' ').slice(0, 2).map((w, i) => i === 1 ? w[0] + '.' : w).join(' ')
@@ -107,6 +109,17 @@ export default function Home() {
         setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -151,7 +164,9 @@ export default function Home() {
       setCartFeedback(`${product.title} se agregó al carrito`);
       setTimeout(() => setCartFeedback(''), 2200);
     } catch (err) {
-      setCartFeedback(err.message || 'No fue posible agregar el producto al carrito');
+      const fallbackCart = addLocalCartItem(product);
+      setCartCount(fallbackCart.items.reduce((sum, item) => sum + item.quantity, 0));
+      setCartFeedback('Guardamos el producto en el carrito local mientras se recupera la API.');
       setTimeout(() => setCartFeedback(''), 2600);
     }
   };
@@ -237,13 +252,48 @@ export default function Home() {
             </svg>
             {cartCount > 0 && <span className="nav-badge">{cartCount}</span>}
           </Link>
-          <button className="user-pill" onClick={logout}>
-            <span className="user-avatar-nav">{displayName[0]}</span>
-            <span>
-              {displayName}
-              <span className="user-role-label">{getRoleLabel(user.role)}</span>
-            </span>
-          </button>
+          <div className="profile-menu-wrap" ref={profileMenuRef}>
+            <button
+              className="user-pill"
+              type="button"
+              onClick={() => setProfileMenuOpen((open) => !open)}
+            >
+              <span className="user-avatar-nav">{displayName[0]}</span>
+              <span>
+                {displayName}
+                <span className="user-role-label">{getRoleLabel(user.role)}</span>
+              </span>
+            </button>
+
+            {profileMenuOpen && (
+              <div className="profile-menu card">
+                <p className="profile-menu-name">{user.fullName || 'Usuario'}</p>
+                <p className="muted profile-menu-email">{user.institutionalEmail}</p>
+
+                <Link
+                  className="profile-menu-link"
+                  to="/profile"
+                  onClick={() => setProfileMenuOpen(false)}
+                >
+                  Ver mi perfil
+                </Link>
+                <Link
+                  className="profile-menu-link"
+                  to="/orders"
+                  onClick={() => setProfileMenuOpen(false)}
+                >
+                  Mis pedidos
+                </Link>
+                <button
+                  type="button"
+                  className="profile-menu-link profile-menu-link--danger"
+                  onClick={logout}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 

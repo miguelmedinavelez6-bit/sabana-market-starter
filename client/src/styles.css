@@ -461,6 +461,10 @@ button, input { font: inherit; }
 
 .user-pill:hover { background: rgba(255, 255, 255, 0.18); }
 
+.profile-menu-wrap {
+  position: relative;
+}
+
 .user-avatar-nav {
   width: 28px;
   height: 28px;
@@ -480,6 +484,48 @@ button, input { font: inherit; }
   font-size: 0.72rem;
   color: rgba(255, 255, 255, 0.72);
   margin-top: 1px;
+}
+
+.profile-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 230px;
+  padding: 16px;
+  border-radius: 16px;
+  z-index: 20;
+}
+
+.profile-menu-name {
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: #10233f;
+}
+
+.profile-menu-email {
+  font-size: 0.82rem;
+  margin: 0 0 12px;
+  word-break: break-word;
+}
+
+.profile-menu-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #10233f;
+  cursor: pointer;
+}
+
+.profile-menu-link:hover {
+  background: #f3f6fb;
+}
+
+.profile-menu-link--danger {
+  color: #b42318;
 }
 
 /* ===== HOME ===== */
@@ -1037,6 +1083,57 @@ button, input { font: inherit; }
 
 /* ===== SELLER PROFILE ===== */
 .seller-profile-card { max-width: 600px; margin: 0 auto; }
+
+.account-card {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.account-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #10233f;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.account-title {
+  margin: 0 0 4px;
+  color: #10233f;
+}
+
+.account-subtitle {
+  margin: 0;
+}
+
+.account-role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #eef3f9;
+  color: #1e3a5f;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.account-description {
+  color: #526174;
+  line-height: 1.6;
+  margin: 0 0 18px;
+}
 
 .seller-profile-header {
   display: flex;

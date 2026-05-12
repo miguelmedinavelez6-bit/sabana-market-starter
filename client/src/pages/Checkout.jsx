@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createOrder, getCart } from '../services/api';
-import { clearStoredCart, syncCartFromResponse } from '../utils/cart';
+import { buildLocalCartSnapshot, clearStoredCart, syncCartFromResponse } from '../utils/cart';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -14,6 +14,7 @@ export default function Checkout() {
   const [cvc, setCvc] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     getCart()
@@ -21,7 +22,15 @@ export default function Checkout() {
         setCart(data.cart);
         syncCartFromResponse(data.cart);
       })
-      .catch((err) => setError(err.message || 'No fue posible cargar el carrito'))
+      .catch((err) => {
+        const localCart = buildLocalCartSnapshot();
+        if (localCart.items.length > 0) {
+          setCart(localCart);
+          setNotice('La API del carrito no respondió; usaremos la copia local para este checkout simulado.');
+        } else {
+          setError(err.message || 'No fue posible cargar el carrito');
+        }
+      })
       .finally(() => setCartLoading(false));
   }, []);
 
@@ -124,16 +133,19 @@ export default function Checkout() {
           {cartLoading ? (
             <p className="muted">Cargando carrito...</p>
           ) : (
-            <div className="checkout-items">
-              {cart.items.map((item) => (
-                <div key={item.productId} className="checkout-item-row">
-                  <span className="checkout-item-name">{item.title}</span>
-                  <span className="checkout-item-price">
-                    ${(item.price * item.quantity).toLocaleString('es-CO')}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <>
+              {notice && <p className="warning">{notice}</p>}
+              <div className="checkout-items">
+                {cart.items.map((item) => (
+                  <div key={item.productId} className="checkout-item-row">
+                    <span className="checkout-item-name">{item.title}</span>
+                    <span className="checkout-item-price">
+                      ${(item.price * item.quantity).toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
 
           <div className="checkout-totals">

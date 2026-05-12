@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { addCartItem, getProductById } from '../services/api';
-import { syncCartFromResponse } from '../utils/cart';
+import { addLocalCartItem, syncCartFromResponse } from '../utils/cart';
 
 const CATEGORY_COLORS = {
   'Electrónica': { bg: '#dbeafe', color: '#1d4ed8' },
@@ -50,7 +50,9 @@ export default function ProductDetail() {
       syncCartFromResponse(data.cart);
       navigate('/cart');
     } catch (err) {
-      setCartMessage(err.message || 'No fue posible agregar el producto al carrito');
+      addLocalCartItem(product);
+      setCartMessage('La API del carrito no respondió; guardamos el producto localmente para que puedas continuar.');
+      navigate('/cart');
     }
   };
 

@@ -1,13 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { deleteCartItem, getCart, updateCartItem } from '../services/api';
-import { syncCartFromResponse } from '../utils/cart';
+import { buildLocalCartSnapshot, deleteLocalCartItem, syncCartFromResponse, updateLocalCartQuantity } from '../utils/cart';
 
 export default function Cart() {
   const navigate = useNavigate();
   const [cart, setCart] = useState({ items: [], subtotal: 0, serviceFee: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     getCart()
@@ -15,7 +16,15 @@ export default function Cart() {
         setCart(data.cart);
         syncCartFromResponse(data.cart);
       })
-      .catch((err) => setError(err.message || 'No fue posible cargar el carrito'))
+      .catch((err) => {
+        const localCart = buildLocalCartSnapshot();
+        if (localCart.items.length > 0) {
+          setCart(localCart);
+          setNotice('La API del carrito no respondió; te mostramos la copia local para que no pierdas tus productos.');
+        } else {
+          setError(err.message || 'No fue posible cargar el carrito');
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -30,7 +39,9 @@ export default function Cart() {
       setCart(data.cart);
       syncCartFromResponse(data.cart);
     } catch (err) {
-      setError(err.message || 'No fue posible actualizar el carrito');
+      const localCart = updateLocalCartQuantity(productId, nextQuantity);
+      setCart(localCart);
+      setNotice('Actualizamos el carrito localmente mientras se recupera la API.');
     }
   };
 
@@ -40,7 +51,9 @@ export default function Cart() {
       setCart(data.cart);
       syncCartFromResponse(data.cart);
     } catch (err) {
-      setError(err.message || 'No fue posible eliminar el producto');
+      const localCart = deleteLocalCartItem(productId);
+      setCart(localCart);
+      setNotice('Eliminamos el producto del carrito local porque la API no respondió.');
     }
   };
 
@@ -67,6 +80,7 @@ export default function Cart() {
       ) : (
         <div className="product-layout">
           <section>
+            {notice && <p className="warning">{notice}</p>}
             {cart.items.map((item) => (
               <article className="card cart-item" key={item.productId}>
                 <div>
