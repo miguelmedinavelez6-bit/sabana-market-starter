@@ -24,6 +24,7 @@ function serializeCart(cart) {
     title: item.title,
     price: item.price,
     quantity: item.quantity,
+    sellerId: item.sellerId,
     sellerName: item.sellerName,
     image: item.image,
   }));
@@ -76,6 +77,7 @@ router.post('/items', async (req, res) => {
       existingItem.quantity += Number(quantity);
       existingItem.price = product.price;
       existingItem.title = product.title;
+      existingItem.sellerId = product.sellerId || '';
       existingItem.sellerName = product.sellerName;
       existingItem.image = product.images?.[0] || '';
     } else {
@@ -84,6 +86,7 @@ router.post('/items', async (req, res) => {
         title: product.title,
         price: product.price,
         quantity: Number(quantity),
+        sellerId: product.sellerId || '',
         sellerName: product.sellerName,
         image: product.images?.[0] || '',
       });

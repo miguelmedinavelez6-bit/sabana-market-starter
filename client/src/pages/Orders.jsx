@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getOrderById, getOrdersHistory } from '../services/api';
+import { getOrderById, getOrdersHistory, submitOrderReview } from '../services/api';
 
 const STATUS_CONFIG = {
   pending:    { label: 'Pendiente',   color: '#b45309', bg: '#fef3c7' },
@@ -70,18 +70,37 @@ function TrackingTimeline({ status }) {
   );
 }
 
-function ReviewForm({ orderId, onClose }) {
+function ReviewForm({ orderId, initiallySubmitted = false, onClose, onSubmitted }) {
   const savedReview = loadSavedReviews()[orderId];
   const [rating, setRating] = useState(savedReview?.rating || 0);
   const [hovered, setHovered] = useState(0);
   const [comment, setComment] = useState(savedReview?.comment || '');
-  const [submitted, setSubmitted] = useState(Boolean(savedReview));
+  const [submitted, setSubmitted] = useState(Boolean(savedReview) || initiallySubmitted);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (initiallySubmitted) {
+      setSubmitted(true);
+    }
+  }, [initiallySubmitted]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!rating) return;
-    saveReview(orderId, { rating, comment, submittedAt: Date.now() });
-    setSubmitted(true);
+    setSaving(true);
+    setError('');
+
+    try {
+      await submitOrderReview(orderId, { rating, comment });
+      saveReview(orderId, { rating, comment, submittedAt: Date.now() });
+      setSubmitted(true);
+      onSubmitted?.();
+    } catch (err) {
+      setError(err.message || 'No fue posible guardar tu reseña');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (submitted) {
@@ -120,9 +139,10 @@ function ReviewForm({ orderId, onClose }) {
         placeholder="Cuéntanos tu experiencia (opcional)..."
         rows={3}
       />
+      {error && <p className="login-error">{error}</p>}
       <div className="review-actions">
-        <button type="submit" className="primary-button small-button" disabled={!rating}>
-          Enviar reseña
+        <button type="submit" className="primary-button small-button" disabled={!rating || saving}>
+          {saving ? 'Enviando...' : 'Enviar reseña'}
         </button>
         <button type="button" className="secondary-button small-button" onClick={onClose}>
           Cancelar
@@ -132,17 +152,23 @@ function ReviewForm({ orderId, onClose }) {
   );
 }
 
-function OrderCard({ order }) {
+function OrderCard({ order, onReviewSubmitted }) {
   const [showTracking, setShowTracking] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [trackingOrder, setTrackingOrder] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingError, setTrackingError] = useState('');
+  const [reviewed, setReviewed] = useState(Boolean(order.reviewed));
+
+  useEffect(() => {
+    setReviewed(Boolean(order.reviewed));
+  }, [order.reviewed]);
 
   const seller = order.items?.[0]?.sellerName || 'Vendedor';
   const itemCount = order.items?.length || 0;
   const firstItems = order.items?.slice(0, 2) || [];
   const orderStatus = trackingOrder?.status || order.status;
+  const hasReview = reviewed || Boolean(trackingOrder?.reviewed);
 
   const handleToggleTracking = async () => {
     if (showTracking) {
@@ -157,6 +183,9 @@ function OrderCard({ order }) {
     try {
       const data = await getOrderById(order.id);
       setTrackingOrder(data.order);
+      if (data.order?.reviewed) {
+        setReviewed(true);
+      }
       setShowTracking(true);
     } catch (err) {
       setTrackingError(err.message || 'No fue posible consultar el seguimiento del pedido');
@@ -214,13 +243,17 @@ function OrderCard({ order }) {
           {showTracking ? 'Ocultar seguimiento' : 'Rastrear pedido'}
         </button>
 
-        {orderStatus === 'delivered' && !showReview && (
+        {orderStatus === 'delivered' && !showReview && !hasReview && (
           <button
             className="primary-button small-button"
             onClick={() => { setShowReview(true); setShowTracking(false); }}
           >
             Dejar reseña
           </button>
+        )}
+
+        {orderStatus === 'delivered' && hasReview && !showReview && (
+          <span className="review-registered-note">Reseña enviada</span>
         )}
       </div>
 
@@ -238,7 +271,15 @@ function OrderCard({ order }) {
 
       {showReview && (
         <div className="order-review-panel">
-          <ReviewForm orderId={order.id} onClose={() => setShowReview(false)} />
+          <ReviewForm
+            orderId={order.id}
+            initiallySubmitted={hasReview}
+            onClose={() => setShowReview(false)}
+            onSubmitted={() => {
+              setReviewed(true);
+              onReviewSubmitted?.(order.id);
+            }}
+          />
         </div>
       )}
     </article>
@@ -256,6 +297,14 @@ export default function Orders() {
       .catch((err) => setError(err.message || 'No fue posible cargar tus pedidos'))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleReviewSubmitted = (orderId) => {
+    setOrders((prev) => prev.map((order) => (
+      order.id === orderId
+        ? { ...order, reviewed: true }
+        : order
+    )));
+  };
 
   return (
     <div className="page">
@@ -287,7 +336,7 @@ export default function Orders() {
       ) : (
         <div className="stack">
           {orders.map((order) => (
-            <OrderCard key={order.id} order={order} />
+            <OrderCard key={order.id} order={order} onReviewSubmitted={handleReviewSubmitted} />
           ))}
         </div>
       )}

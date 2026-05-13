@@ -1,17 +1,52 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getMessageThread, getMessageThreads, sendMessage } from '../services/api';
+import { createConversation, getConversations, sendConversationMessage } from '../services/api';
 import { getStoredUser } from '../utils/auth';
 
-function normalizeThread(thread = {}) {
+function normalizeMessage(message = {}) {
   return {
-    productId: thread.productId,
-    productTitle: thread.productTitle || '',
-    sellerName: thread.sellerName || 'Vendedor',
-    messages: thread.messages || [],
-    lastMessage: thread.lastMessage || thread.messages?.[thread.messages.length - 1] || null,
-    updatedAt: thread.updatedAt ? new Date(thread.updatedAt).getTime() : 0,
+    id: message.id || message._id || `${message.senderId || 'msg'}-${message.createdAt || message.ts || Date.now()}`,
+    senderId: String(message.senderId || ''),
+    senderName: message.senderName || 'Usuario',
+    senderRole: message.senderRole || 'buyer',
+    content: message.content || message.text || '',
+    createdAt: message.createdAt || message.ts || new Date().toISOString(),
   };
+}
+
+function normalizeConversation(conversation = {}) {
+  const messages = (conversation.messages || []).map(normalizeMessage);
+  const lastMessage = conversation.lastMessage
+    ? normalizeMessage(conversation.lastMessage)
+    : messages[messages.length - 1] || null;
+
+  return {
+    id: String(conversation.id || conversation._id || ''),
+    productId: String(conversation.productId || ''),
+    productTitle: conversation.productTitle || '',
+    productImage: conversation.productImage || '',
+    sellerId: String(conversation.sellerId || ''),
+    sellerName: conversation.sellerName || 'Vendedor',
+    buyerId: String(conversation.buyerId || ''),
+    buyerName: conversation.buyerName || 'Comprador',
+    messages,
+    lastMessage,
+    updatedAt: conversation.updatedAt ? new Date(conversation.updatedAt).getTime() : 0,
+    isDraft: false,
+  };
+}
+
+function getCounterpartName(conversation, currentUser) {
+  const currentUserId = String(currentUser.id || '');
+  const currentUserName = currentUser.fullName || '';
+  const isSellerView = (
+    String(conversation.sellerId || '') === currentUserId
+    || String(conversation.sellerName || '') === currentUserName
+  );
+
+  return isSellerView
+    ? (conversation.buyerName || 'Comprador')
+    : (conversation.sellerName || 'Vendedor');
 }
 
 export default function Messages() {
@@ -19,38 +54,70 @@ export default function Messages() {
   const incomingProduct = state?.product || null;
   const currentUser = getStoredUser();
   const currentUserId = String(currentUser.id || '');
+  const currentUserName = currentUser.fullName || 'Usuario';
 
-  const [threads, setThreads] = useState([]);
-  const [selectedId, setSelectedId] = useState(incomingProduct?.id || null);
+  const [conversations, setConversations] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
   const [input, setInput] = useState('');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const selectedThread = useMemo(() => {
-    if (selectedId) {
-      const existing = threads.find((thread) => thread.productId === selectedId);
-      if (existing) return existing;
-    }
+  const draftConversation = useMemo(() => {
+    const productId = String(incomingProduct?.id || incomingProduct?._id || '');
+    if (!productId) return null;
 
-    if (incomingProduct && String(incomingProduct.id || incomingProduct._id) === String(selectedId)) {
-      return normalizeThread({
-        productId: String(incomingProduct.id || incomingProduct._id),
-        productTitle: incomingProduct.title,
-        sellerName: incomingProduct.seller?.fullName || incomingProduct.sellerName || 'Vendedor',
-        messages: [],
-      });
-    }
+    const sellerName = incomingProduct?.sellerName || incomingProduct?.seller?.fullName || 'Vendedor';
+    const sellerId = String(
+      incomingProduct?.sellerId
+      || incomingProduct?.seller?.id
+      || encodeURIComponent(sellerName)
+    );
 
-    return null;
-  }, [threads, selectedId, incomingProduct]);
+    return {
+      id: `draft:${productId}:${sellerId}`,
+      productId,
+      productTitle: incomingProduct?.title || 'Producto',
+      productImage: incomingProduct?.productImage || incomingProduct?.images?.[0] || '',
+      sellerId,
+      sellerName,
+      buyerId: currentUserId,
+      buyerName: currentUserName,
+      messages: [],
+      lastMessage: null,
+      updatedAt: 0,
+      isDraft: true,
+    };
+  }, [incomingProduct, currentUserId, currentUserName]);
 
-  const loadThreads = async () => {
+  const loadConversations = async () => {
     try {
-      const data = await getMessageThreads();
-      const normalized = (data.threads || []).map(normalizeThread);
-      setThreads(normalized);
+      const data = await getConversations();
+      const normalized = (data.conversations || []).map(normalizeConversation);
+      setConversations(normalized);
       setError('');
+
+      setSelectedId((currentSelected) => {
+        if (currentSelected && normalized.some((conversation) => conversation.id === currentSelected)) {
+          return currentSelected;
+        }
+
+        if (draftConversation) {
+          const existing = normalized.find((conversation) => (
+            conversation.productId === draftConversation.productId
+            && conversation.sellerId === draftConversation.sellerId
+            && conversation.buyerId === currentUserId
+          ));
+
+          if (existing) return existing.id;
+          if (currentSelected?.startsWith('draft:')) return currentSelected;
+          return draftConversation.id;
+        }
+
+        return normalized[0]?.id || null;
+      });
     } catch (err) {
       setError(err.message || 'No fue posible cargar los mensajes');
     } finally {
@@ -59,55 +126,97 @@ export default function Messages() {
   };
 
   useEffect(() => {
-    loadThreads();
-    const intervalId = window.setInterval(loadThreads, 4000);
+    loadConversations();
+    const intervalId = window.setInterval(loadConversations, 4000);
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [draftConversation, currentUserId]);
 
   useEffect(() => {
-    if (incomingProduct?.id || incomingProduct?._id) {
-      setSelectedId(String(incomingProduct.id || incomingProduct._id));
+    if (!selectedId) {
+      if (draftConversation) {
+        setSelectedId(draftConversation.id);
+      } else if (conversations.length > 0) {
+        setSelectedId(conversations[0].id);
+      }
     }
-  }, [incomingProduct]);
-
-  useEffect(() => {
-    if (!selectedId && threads.length > 0) {
-      setSelectedId(threads[0].productId);
-    }
-  }, [threads, selectedId]);
+  }, [conversations, selectedId, draftConversation]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedId, threads]);
+  }, [selectedId, conversations]);
+
+  const selectedConversation = useMemo(() => {
+    if (selectedId?.startsWith('draft:')) {
+      return draftConversation;
+    }
+
+    return conversations.find((conversation) => conversation.id === selectedId) || null;
+  }, [selectedId, conversations, draftConversation]);
+
+  const sortedConversations = useMemo(
+    () => [...conversations].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
+    [conversations]
+  );
+
+  const filteredConversations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sortedConversations;
+
+    return sortedConversations.filter((conversation) => {
+      const preview = conversation.lastMessage?.content || '';
+      return [
+        conversation.sellerName,
+        conversation.buyerName,
+        conversation.productTitle,
+        preview,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [search, sortedConversations]);
 
   const sendCurrentMessage = async (e) => {
     e.preventDefault();
-    if (!input.trim() || !selectedThread) return;
+    if (!input.trim() || !selectedConversation || sending) return;
 
-    const productId = String(selectedThread.productId);
-    const payload = {
-      text: input.trim(),
-      productTitle: selectedThread.productTitle || incomingProduct?.title || '',
-      sellerName: selectedThread.sellerName || incomingProduct?.seller?.fullName || incomingProduct?.sellerName || 'Vendedor',
-    };
-
+    const content = input.trim();
     setInput('');
+    setSending(true);
+    setError('');
 
     try {
-      const data = await sendMessage(productId, payload);
-      const updated = normalizeThread(data.thread);
-      setThreads((prev) => {
-        const exists = prev.some((thread) => String(thread.productId) === productId);
-        if (!exists) return [updated, ...prev];
-        return prev.map((thread) => String(thread.productId) === productId ? updated : thread);
+      const data = selectedConversation.isDraft
+        ? await createConversation({
+            productId: selectedConversation.productId,
+            sellerId: selectedConversation.sellerId,
+            content,
+          })
+        : await sendConversationMessage(selectedConversation.id, { content });
+
+      const updated = normalizeConversation(data.conversation);
+      setConversations((prev) => {
+        const others = prev.filter((conversation) => conversation.id !== updated.id);
+        return [updated, ...others];
       });
-      setSelectedId(productId);
+      setSelectedId(updated.id);
     } catch (err) {
       setError(err.message || 'No fue posible enviar el mensaje');
+      setInput(content);
+    } finally {
+      setSending(false);
     }
   };
 
-  const sortedThreads = [...threads].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const formatConversationTime = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    return date.toLocaleString('es-CO', {
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
 
   return (
     <div className="page messages-page">
@@ -116,42 +225,82 @@ export default function Messages() {
       <div className="messages-root">
         <aside className="messages-sidebar card">
           <h2 className="messages-sidebar-title">Mensajes</h2>
+          <div className="messages-search-wrap">
+            <input
+              className="messages-search-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar conversaciones"
+            />
+          </div>
 
           {loading ? (
             <p className="muted messages-sidebar-empty">Cargando conversaciones...</p>
-          ) : sortedThreads.length === 0 ? (
+          ) : filteredConversations.length === 0 && !draftConversation ? (
             <p className="muted messages-sidebar-empty">
-              Aún no tienes conversaciones.<br />Contacta a un vendedor desde un producto.
+              {search.trim()
+                ? 'No encontramos conversaciones con ese término.'
+                : 'Aún no tienes conversaciones.\nContacta a un vendedor desde un producto.'}
             </p>
           ) : (
-            sortedThreads.map((thread) => {
-              const last = thread.lastMessage || thread.messages[thread.messages.length - 1];
-              return (
+            <>
+              {draftConversation && selectedId?.startsWith('draft:') && (
                 <button
-                  key={thread.productId}
-                  className={`messages-conv-item ${String(thread.productId) === String(selectedId) ? 'messages-conv-item--active' : ''}`}
-                  onClick={() => setSelectedId(String(thread.productId))}
+                  className="messages-conv-item messages-conv-item--active"
                   type="button"
+                  onClick={() => setSelectedId(draftConversation.id)}
                 >
                   <div className="messages-conv-avatar">
-                    {(thread.sellerName || 'V')[0].toUpperCase()}
+                    {(draftConversation.sellerName || 'V')[0].toUpperCase()}
                   </div>
                   <div className="messages-conv-info">
-                    <p className="messages-conv-name">{thread.sellerName || 'Vendedor'}</p>
-                    <p className="messages-conv-preview">
-                      {last
-                        ? (last.senderId === currentUserId ? `Tú: ${last.text}` : last.text)
-                        : thread.productTitle || 'Nueva conversación'}
-                    </p>
+                    <div className="messages-conv-row">
+                      <p className="messages-conv-name">{draftConversation.sellerName}</p>
+                      <span className="messages-conv-time">Nuevo</span>
+                    </div>
+                    <p className="messages-conv-product">{draftConversation.productTitle}</p>
+                    <p className="messages-conv-preview">Empieza esta conversación</p>
                   </div>
                 </button>
-              );
-            })
+              )}
+
+              {filteredConversations.map((conversation) => {
+                const last = conversation.lastMessage || conversation.messages[conversation.messages.length - 1];
+                const counterpartName = getCounterpartName(conversation, currentUser);
+
+                return (
+                  <button
+                    key={conversation.id}
+                    className={`messages-conv-item ${conversation.id === selectedId ? 'messages-conv-item--active' : ''}`}
+                    onClick={() => setSelectedId(conversation.id)}
+                    type="button"
+                  >
+                    <div className="messages-conv-avatar">
+                      {counterpartName[0].toUpperCase()}
+                    </div>
+                    <div className="messages-conv-info">
+                      <div className="messages-conv-row">
+                        <p className="messages-conv-name">{counterpartName}</p>
+                        <span className="messages-conv-time">
+                          {formatConversationTime(last?.createdAt || conversation.updatedAt)}
+                        </span>
+                      </div>
+                      <p className="messages-conv-product">{conversation.productTitle || 'Producto sin título'}</p>
+                      <p className="messages-conv-preview">
+                        {last
+                          ? (last.senderId === currentUserId ? `Tú: ${last.content}` : last.content)
+                          : 'Nueva conversación'}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </>
           )}
         </aside>
 
         <div className="messages-chat card">
-          {!selectedThread ? (
+          {!selectedConversation ? (
             <div className="messages-empty-state">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -162,13 +311,13 @@ export default function Messages() {
             <>
               <div className="messages-chat-header">
                 <div className="messages-conv-avatar">
-                  {(selectedThread.sellerName || 'V')[0].toUpperCase()}
+                  {(getCounterpartName(selectedConversation, currentUser) || 'V')[0].toUpperCase()}
                 </div>
                 <div>
-                  <p className="messages-conv-name">{selectedThread.sellerName || 'Vendedor'}</p>
-                  {selectedThread.productTitle && (
+                  <p className="messages-conv-name">{getCounterpartName(selectedConversation, currentUser)}</p>
+                  {selectedConversation.productTitle && (
                     <p className="muted messages-product-ref">
-                      Re: {selectedThread.productTitle}
+                      Producto: {selectedConversation.productTitle}
                     </p>
                   )}
                 </div>
@@ -177,15 +326,18 @@ export default function Messages() {
               {error && <p className="login-error messages-error">{error}</p>}
 
               <div className="messages-body">
-                {selectedThread.messages.length === 0 && (
+                {selectedConversation.messages.length === 0 && (
                   <p className="muted messages-empty">Inicia la conversación.</p>
                 )}
-                {selectedThread.messages.map((msg, i) => (
+                {selectedConversation.messages.map((msg, i) => (
                   <div
-                    key={`${msg.ts || i}-${i}`}
+                    key={`${msg.id || i}-${i}`}
                     className={`message-bubble ${msg.senderId === currentUserId ? 'message-bubble--sent' : 'message-bubble--received'}`}
                   >
-                    <p>{msg.text}</p>
+                    <p>{msg.content}</p>
+                    <span className="message-time">
+                      {formatConversationTime(msg.createdAt)}
+                    </span>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
@@ -199,8 +351,8 @@ export default function Messages() {
                   placeholder="Escribe un mensaje..."
                   autoFocus
                 />
-                <button type="submit" className="primary-button messages-send-btn" disabled={!input.trim()}>
-                  Enviar
+                <button type="submit" className="primary-button messages-send-btn" disabled={!input.trim() || sending}>
+                  {sending ? 'Enviando...' : 'Enviar'}
                 </button>
               </form>
             </>

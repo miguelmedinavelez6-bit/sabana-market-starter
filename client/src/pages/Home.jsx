@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { addCartItem, becomeSeller, getCart, getMarketplaceProducts } from '../services/api';
-import { getRoleLabel, getStoredUser, saveAuthSession } from '../utils/auth';
+import { addCartItem, becomeSeller, getCart, getMarketplaceProducts, getNotifications } from '../services/api';
+import { clearAuthSession, getRoleLabel, getStoredUser, saveAuthSession } from '../utils/auth';
 import { addLocalCartItem, getStoredCartCount, syncCartFromResponse } from '../utils/cart';
 
 const CATEGORY_COLORS = {
@@ -91,6 +91,7 @@ export default function Home() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [upgradingRole, setUpgradingRole] = useState(false);
   const [cartCount, setCartCount] = useState(() => getStoredCartCount());
+  const [notificationCount, setNotificationCount] = useState(0);
   const navigate = useNavigate();
   const profileMenuRef = useRef(null);
 
@@ -113,6 +114,29 @@ export default function Home() {
         setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadNotifications = async () => {
+      try {
+        const data = await getNotifications();
+        if (!cancelled) {
+          setNotificationCount(data.unreadCount ?? (data.notifications || []).filter((item) => !item.read).length);
+        }
+      } catch {
+        if (!cancelled) setNotificationCount(0);
+      }
+    };
+
+    loadNotifications();
+    const intervalId = window.setInterval(loadNotifications, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -192,8 +216,7 @@ export default function Home() {
   };
 
   const logout = () => {
-    localStorage.clear();
-    sessionStorage.clear();
+    clearAuthSession();
     navigate('/');
   };
 
@@ -237,17 +260,16 @@ export default function Home() {
         </div>
 
         <div className="navbar-actions">
-          <Link className="nav-icon-btn" to="/orders" aria-label="Notificaciones">
+          <Link className="nav-icon-btn" to="/notifications" aria-label="Notificaciones">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <span className="nav-badge">1</span>
+            {notificationCount > 0 && <span className="nav-badge">{notificationCount}</span>}
           </Link>
           <Link className="nav-icon-btn" to="/messages" aria-label="Mensajes">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-            <span className="nav-badge">1</span>
           </Link>
           <Link className="nav-icon-btn" to="/cart" aria-label="Carrito">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
@@ -262,7 +284,13 @@ export default function Home() {
               type="button"
               onClick={() => setProfileMenuOpen((open) => !open)}
             >
-              <span className="user-avatar-nav">{displayName[0]}</span>
+              <span className="user-avatar-nav">
+                {user.photoUrl ? (
+                  <img src={user.photoUrl} alt={user.fullName || 'Usuario'} className="user-avatar-nav-image" />
+                ) : (
+                  displayName[0]
+                )}
+              </span>
               <span>
                 {displayName}
                 <span className="user-role-label">{getRoleLabel(user.role)}</span>
@@ -276,11 +304,36 @@ export default function Home() {
 
                 <Link
                   className="profile-menu-link"
+                  to="/notifications"
+                  onClick={() => setProfileMenuOpen(false)}
+                >
+                  Ver notificaciones
+                </Link>
+                <Link
+                  className="profile-menu-link"
                   to="/profile"
                   onClick={() => setProfileMenuOpen(false)}
                 >
                   Ver mi perfil
                 </Link>
+                {(user.role === 'seller' || user.role === 'admin') && (
+                  <Link
+                    className="profile-menu-link"
+                    to="/seller/dashboard"
+                    onClick={() => setProfileMenuOpen(false)}
+                  >
+                    Panel de vendedor
+                  </Link>
+                )}
+                {user.role === 'admin' && (
+                  <Link
+                    className="profile-menu-link"
+                    to="/admin/dashboard"
+                    onClick={() => setProfileMenuOpen(false)}
+                  >
+                    Panel administrador
+                  </Link>
+                )}
                 <Link
                   className="profile-menu-link"
                   to="/orders"
@@ -312,6 +365,16 @@ export default function Home() {
               <button className="hero-cta" type="button">
                 Ver ofertas del mes
               </button>
+              {(user.role === 'seller' || user.role === 'admin') && (
+                <Link className="secondary-button inline-button" to="/seller/dashboard">
+                  Ir a mi panel
+                </Link>
+              )}
+              {user.role === 'admin' && (
+                <Link className="secondary-button inline-button" to="/admin/dashboard">
+                  Ir a moderación
+                </Link>
+              )}
               {user.role === 'buyer' && (
                 <button
                   className="secondary-button"

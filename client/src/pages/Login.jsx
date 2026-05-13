@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loginUser } from '../services/api';
+import {
+  exchangeMicrosoftCode,
+  getMicrosoftAuthUrl,
+  loginUser,
+  registerUser,
+} from '../services/api';
 import { getStoredToken, saveAuthSession } from '../utils/auth';
 
 const INSTITUTIONAL_DOMAIN = '@unisabana.edu.co';
+const MICROSOFT_STATE_KEY = 'sabana_market_ms_state';
 
 function LogoIcon() {
   return (
@@ -27,11 +33,16 @@ function MicrosoftLogo() {
 }
 
 export default function Login() {
+  const [mode, setMode] = useState('login');
+  const [fullName, setFullName] = useState('');
+  const [career, setCareer] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,9 +63,55 @@ export default function Login() {
     };
   }, []);
 
+  useEffect(() => {
+    const token = getStoredToken();
+    if (token) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    const providerError = params.get('error');
+
+    if (providerError) {
+      setError('Microsoft canceló o rechazó la autenticación.');
+      navigate('/', { replace: true });
+      return;
+    }
+
+    if (!code) return;
+
+    const expectedState = sessionStorage.getItem(MICROSOFT_STATE_KEY);
+    if (expectedState && state && expectedState !== state) {
+      setError('No fue posible validar la respuesta de Microsoft.');
+      navigate('/', { replace: true });
+      return;
+    }
+
+    setMicrosoftLoading(true);
+    setError('');
+
+    exchangeMicrosoftCode({
+      code,
+      redirectUri: `${window.location.origin}/`,
+    })
+      .then((data) => {
+        saveAuthSession(data, true);
+        sessionStorage.removeItem(MICROSOFT_STATE_KEY);
+        navigate('/home', { replace: true });
+      })
+      .catch((err) => {
+        setError(err.message || 'No fue posible iniciar sesión con Microsoft');
+        navigate('/', { replace: true });
+      })
+      .finally(() => setMicrosoftLoading(false));
+  }, [navigate]);
+
   const validate = () => {
+    if (mode === 'register' && !fullName.trim()) return 'Por favor ingresa tu nombre completo.';
     if (!email.trim() || !password.trim()) return 'Por favor completa todos los campos.';
     if (!email.endsWith(INSTITUTIONAL_DOMAIN)) return `El correo debe terminar en ${INSTITUTIONAL_DOMAIN}.`;
+    if (mode === 'register' && password.length < 6) return 'La contraseña debe tener al menos 6 caracteres.';
+    if (mode === 'register' && password !== confirmPassword) return 'Las contraseñas no coinciden.';
     return null;
   };
 
@@ -65,13 +122,38 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const data = await loginUser({ institutionalEmail: email, password });
+      const data = mode === 'login'
+        ? await loginUser({ institutionalEmail: email, password })
+        : await registerUser({
+            fullName,
+            career,
+            institutionalEmail: email,
+            password,
+          });
       saveAuthSession(data, remember);
       navigate('/home');
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMicrosoftLogin = async () => {
+    setMicrosoftLoading(true);
+    setError('');
+
+    try {
+      const state = Math.random().toString(36).slice(2);
+      sessionStorage.setItem(MICROSOFT_STATE_KEY, state);
+      const data = await getMicrosoftAuthUrl({
+        state,
+        redirectUri: `${window.location.origin}/`,
+      });
+      window.location.assign(data.url);
+    } catch (err) {
+      setError(err.message || 'No fue posible conectar con Microsoft');
+      setMicrosoftLoading(false);
     }
   };
 
@@ -86,18 +168,88 @@ export default function Login() {
       </div>
 
       <div className="login-card">
-        <h2 className="login-card-title">Iniciar Sesión</h2>
+        <div className="login-mode-switch">
+          <button
+            type="button"
+            className={`login-mode-btn ${mode === 'login' ? 'login-mode-btn--active' : ''}`}
+            onClick={() => {
+              setMode('login');
+              setError('');
+            }}
+          >
+            Iniciar sesión
+          </button>
+          <button
+            type="button"
+            className={`login-mode-btn ${mode === 'register' ? 'login-mode-btn--active' : ''}`}
+            onClick={() => {
+              setMode('register');
+              setError('');
+            }}
+          >
+            Crear cuenta
+          </button>
+        </div>
 
-        <button type="button" className="ms-button">
-          <MicrosoftLogo />
-          Continuar con Microsoft
-        </button>
+        <h2 className="login-card-title">
+          {mode === 'login' ? 'Iniciar Sesión' : 'Crear cuenta'}
+        </h2>
+
+        {mode === 'login' && (
+          <button type="button" className="ms-button" onClick={handleMicrosoftLogin} disabled={microsoftLoading || loading}>
+            <MicrosoftLogo />
+            {microsoftLoading ? 'Conectando con Microsoft...' : 'Continuar con Microsoft'}
+          </button>
+        )}
 
         <div className="login-divider">
-          <span>O ingresa con tu correo</span>
+          <span>{mode === 'login' ? 'O ingresa con tu correo' : 'Completa tu registro institucional'}</span>
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
+          {mode === 'register' && (
+            <>
+              <div className="field-group">
+                <label className="field-label" htmlFor="fullName">Nombre completo</label>
+                <div className="field-wrapper">
+                  <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  <input
+                    id="fullName"
+                    type="text"
+                    className="field-input"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Sofía Rodríguez"
+                    autoComplete="name"
+                  />
+                </div>
+              </div>
+
+              <div className="field-group">
+                <label className="field-label" htmlFor="career">Carrera (opcional)</label>
+                <div className="field-wrapper">
+                  <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="m4 6 8-4 8 4-8 4-8-4Z" />
+                    <path d="m4 10 8 4 8-4" />
+                    <path d="m4 14 8 4 8-4" />
+                  </svg>
+                  <input
+                    id="career"
+                    type="text"
+                    className="field-input"
+                    value={career}
+                    onChange={(e) => setCareer(e.target.value)}
+                    placeholder="Administración de Empresas"
+                    autoComplete="organization-title"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="field-group">
             <label className="field-label" htmlFor="email">Correo Institucional</label>
             <div className="field-wrapper">
@@ -136,6 +288,27 @@ export default function Login() {
             </div>
           </div>
 
+          {mode === 'register' && (
+            <div className="field-group">
+              <label className="field-label" htmlFor="confirmPassword">Confirmar contraseña</label>
+              <div className="field-wrapper">
+                <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  className="field-input"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+          )}
+
           {error && <p className="login-error">{error}</p>}
 
           <div className="login-options-row">
@@ -145,19 +318,31 @@ export default function Login() {
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
               />
-              Recordarme
+              {mode === 'login' ? 'Recordarme' : 'Mantener sesión iniciada'}
             </label>
-            <button type="button" className="text-link">¿Olvidaste tu contraseña?</button>
+            {mode === 'login' && <button type="button" className="text-link">¿Olvidaste tu contraseña?</button>}
           </div>
 
           <button type="submit" className="login-submit" disabled={loading}>
-            {loading ? 'Ingresando...' : 'Iniciar Sesión →'}
+            {loading
+              ? (mode === 'login' ? 'Ingresando...' : 'Creando cuenta...')
+              : (mode === 'login' ? 'Iniciar Sesión →' : 'Crear cuenta →')}
           </button>
         </form>
       </div>
 
       <p className="login-footer">
-        ¿No tienes una cuenta? <button type="button" className="text-link-bold">Regístrate aquí</button>
+        {mode === 'login' ? '¿No tienes una cuenta?' : '¿Ya tienes una cuenta?'}{' '}
+        <button
+          type="button"
+          className="text-link-bold"
+          onClick={() => {
+            setMode((current) => current === 'login' ? 'register' : 'login');
+            setError('');
+          }}
+        >
+          {mode === 'login' ? 'Regístrate aquí' : 'Inicia sesión aquí'}
+        </button>
       </p>
     </div>
   );

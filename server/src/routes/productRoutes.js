@@ -1,7 +1,14 @@
 const express = require('express');
 const Product = require('../models/Product');
+const { authMiddleware, requireRoles } = require('../middleware/auth');
 
 const router = express.Router();
+
+const STATUS_LABELS = {
+  new: 'Nuevo',
+  used: 'Usado',
+  digital: 'Digital',
+};
 
 function serializeProductList(product) {
   const sellerName = product.sellerName || 'Vendedor';
@@ -10,6 +17,7 @@ function serializeProductList(product) {
   return {
     ...product,
     id: String(product._id),
+    sellerId: product.sellerId || '',
     seller: sellerName,
     sellerName,
     sellerReputation,
@@ -19,14 +27,16 @@ function serializeProductList(product) {
 function serializeProductDetail(product) {
   const sellerName = product.sellerName || 'Vendedor';
   const sellerReputation = product.sellerReputation ?? 5;
+  const sellerId = product.sellerId || encodeURIComponent(sellerName);
 
   return {
     ...product,
     id: String(product._id),
+    sellerId: product.sellerId || '',
     sellerName,
     sellerReputation,
     seller: {
-      id: encodeURIComponent(sellerName),
+      id: sellerId,
       fullName: sellerName,
       reputation: sellerReputation,
     },
@@ -136,6 +146,149 @@ async function respondWithProducts(req, res, { detail = false } = {}) {
     pages: Math.max(1, Math.ceil(total / limit)),
   });
 }
+
+function buildOwnedProductsQuery(user) {
+  return {
+    $or: [
+      { sellerId: String(user.id || '') },
+      { sellerName: user.fullName || '' },
+    ],
+  };
+}
+
+function normalizeImages(images = []) {
+  const cleaned = Array.isArray(images)
+    ? images.map((image) => String(image || '').trim()).filter(Boolean)
+    : [];
+
+  return cleaned.length > 0
+    ? cleaned
+    : ['https://images.unsplash.com/photo-1516321497487-e288fb19713f?w=600&h=400&fit=crop&q=80'];
+}
+
+async function findOwnedProduct(productId, user) {
+  const product = await Product.findById(productId);
+  if (!product) return null;
+
+  const ownsById = String(product.sellerId || '') === String(user.id || '');
+  const ownsByName = String(product.sellerName || '') === String(user.fullName || '');
+
+  return ownsById || ownsByName ? product : false;
+}
+
+router.get('/mine', authMiddleware, requireRoles(['seller', 'admin']), async (req, res) => {
+  try {
+    const products = await Product.find(buildOwnedProductsQuery(req.user)).sort({ createdAt: -1 }).lean();
+
+    return res.json({
+      products: products.map(serializeProductList),
+      total: products.length,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'No fue posible cargar tus productos' });
+  }
+});
+
+router.post('/', authMiddleware, requireRoles(['seller', 'admin']), async (req, res) => {
+  const title = String(req.body?.title || '').trim();
+  const description = String(req.body?.description || '').trim();
+  const category = String(req.body?.category || '').trim();
+  const status = String(req.body?.status || '').trim();
+  const price = Number(req.body?.price);
+  const images = normalizeImages(req.body?.images);
+
+  if (!title || !description || !category || !STATUS_LABELS[status] || !Number.isFinite(price) || price <= 0) {
+    return res.status(400).json({ message: 'Debes completar título, descripción, categoría, estado y precio válidos' });
+  }
+
+  try {
+    const product = await Product.create({
+      title,
+      description,
+      price,
+      category,
+      status,
+      statusLabel: String(req.body?.statusLabel || STATUS_LABELS[status]),
+      images,
+      sellerId: String(req.user.id),
+      sellerName: req.user.fullName || 'Vendedor',
+      sellerReputation: Number(req.user.reputation || 5),
+    });
+
+    return res.status(201).json({
+      message: 'Producto publicado correctamente',
+      product: serializeProductDetail(product.toObject()),
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'No fue posible publicar el producto' });
+  }
+});
+
+router.patch('/:id', authMiddleware, requireRoles(['seller', 'admin']), async (req, res) => {
+  const title = String(req.body?.title || '').trim();
+  const description = String(req.body?.description || '').trim();
+  const category = String(req.body?.category || '').trim();
+  const status = String(req.body?.status || '').trim();
+  const price = Number(req.body?.price);
+  const images = normalizeImages(req.body?.images);
+
+  if (!title || !description || !category || !STATUS_LABELS[status] || !Number.isFinite(price) || price <= 0) {
+    return res.status(400).json({ message: 'Debes completar título, descripción, categoría, estado y precio válidos' });
+  }
+
+  try {
+    const ownedProduct = await findOwnedProduct(req.params.id, req.user);
+
+    if (ownedProduct === null) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    if (ownedProduct === false) {
+      return res.status(403).json({ message: 'No puedes editar un producto que no te pertenece' });
+    }
+
+    ownedProduct.title = title;
+    ownedProduct.description = description;
+    ownedProduct.price = price;
+    ownedProduct.category = category;
+    ownedProduct.status = status;
+    ownedProduct.statusLabel = String(req.body?.statusLabel || STATUS_LABELS[status]);
+    ownedProduct.images = images;
+    ownedProduct.sellerReputation = Number(req.user.reputation || ownedProduct.sellerReputation || 5);
+    await ownedProduct.save();
+
+    return res.json({
+      message: 'Producto actualizado correctamente',
+      product: serializeProductDetail(ownedProduct.toObject()),
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'No fue posible actualizar el producto' });
+  }
+});
+
+router.delete('/:id', authMiddleware, requireRoles(['seller', 'admin']), async (req, res) => {
+  try {
+    const ownedProduct = await findOwnedProduct(req.params.id, req.user);
+
+    if (ownedProduct === null) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    if (ownedProduct === false) {
+      return res.status(403).json({ message: 'No puedes eliminar un producto que no te pertenece' });
+    }
+
+    await Product.deleteOne({ _id: ownedProduct._id });
+
+    return res.json({ message: 'Producto eliminado correctamente' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'No fue posible eliminar el producto' });
+  }
+});
 
 router.get('/', async (req, res) => {
   await respondWithProducts(req, res);

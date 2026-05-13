@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { addCartItem, getProductById } from '../services/api';
+import { addCartItem, getProductById, submitReport } from '../services/api';
 import { addLocalCartItem, syncCartFromResponse } from '../utils/cart';
 
 const CATEGORY_COLORS = {
@@ -29,6 +29,11 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cartMessage, setCartMessage] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('Información engañosa');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportMessage, setReportMessage] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,7 +62,38 @@ export default function ProductDetail() {
   };
 
   const contactSeller = () => {
-    navigate('/messages', { state: { product } });
+    navigate('/messages', {
+      state: {
+        product: {
+          ...product,
+          sellerId: product.seller?.id || product.sellerId || encodeURIComponent(product.sellerName || product.seller?.fullName || 'Vendedor'),
+          sellerName: product.sellerName || product.seller?.fullName || 'Vendedor',
+          productImage: product.images?.[0] || '',
+        },
+      },
+    });
+  };
+
+  const handleReportProduct = async (event) => {
+    event.preventDefault();
+    setReportSaving(true);
+    setReportMessage('');
+
+    try {
+      const data = await submitReport({
+        targetType: 'product',
+        targetId: product.id || product._id,
+        reason: reportReason,
+        details: reportDetails,
+      });
+      setReportMessage(data.message || 'Reporte enviado correctamente');
+      setReportDetails('');
+      setReportOpen(false);
+    } catch (err) {
+      setReportMessage(err.message || 'No fue posible enviar el reporte');
+    } finally {
+      setReportSaving(false);
+    }
   };
 
   if (loading) {
@@ -115,8 +151,44 @@ export default function ProductDetail() {
           <div className="button-row">
             <button className="primary-button" onClick={addToCart}>Agregar al carrito</button>
             <button className="secondary-button" onClick={contactSeller}>Contactar al vendedor</button>
+            <button className="secondary-button" onClick={() => setReportOpen((open) => !open)}>
+              {reportOpen ? 'Cancelar reporte' : 'Reportar producto'}
+            </button>
           </div>
           {cartMessage && <p className="login-error">{cartMessage}</p>}
+          {reportMessage && <p className={reportMessage.includes('correctamente') ? 'success-note' : 'login-error'}>{reportMessage}</p>}
+          {reportOpen && (
+            <form className="report-form" onSubmit={handleReportProduct}>
+              <label>
+                Motivo
+                <select
+                  className="seller-select"
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                >
+                  <option>Información engañosa</option>
+                  <option>Contenido inapropiado</option>
+                  <option>Posible fraude</option>
+                  <option>Producto prohibido</option>
+                </select>
+              </label>
+              <label>
+                Detalles
+                <textarea
+                  className="seller-textarea"
+                  rows={3}
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                  placeholder="Cuéntanos por qué estás reportando este producto"
+                />
+              </label>
+              <div className="button-row">
+                <button type="submit" className="primary-button" disabled={reportSaving}>
+                  {reportSaving ? 'Enviando...' : 'Enviar reporte'}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
 
         <aside className="card seller-card">

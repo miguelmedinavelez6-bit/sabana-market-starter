@@ -8,6 +8,7 @@ const productSchema = new mongoose.Schema({
   status: { type: String, enum: ['new', 'used', 'digital'], required: true },
   statusLabel: { type: String, required: true },
   images: [String],
+  sellerId: { type: String, default: '' },
   sellerName: { type: String, required: true },
   sellerReputation: { type: Number, default: 5.0 },
 }, { timestamps: true });

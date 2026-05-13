@@ -30,6 +30,13 @@ export function saveAuthSession({ token, user }, remember = null) {
   otherStorage.removeItem('user');
 }
 
+export function clearAuthSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+}
+
 export function getAuthHeaders(extraHeaders = {}) {
   const token = getStoredToken();
   return token

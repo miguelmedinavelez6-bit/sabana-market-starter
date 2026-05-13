@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed": "node src/seeds/seed.js"
+    "seed": "node src/seeds/seed.js",
+    "backfill": "node src/scripts/backfillMarketplaceData.js",
+    "test": "node --test src/**/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

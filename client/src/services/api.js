@@ -33,6 +33,63 @@ export async function loginUser(payload) {
   return handleResponse(response);
 }
 
+export async function registerUser(payload) {
+  const response = await fetch(`${API_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function getMicrosoftAuthUrl({ state, redirectUri }) {
+  const searchParams = new URLSearchParams();
+  if (state) searchParams.set('state', state);
+  if (redirectUri) searchParams.set('redirectUri', redirectUri);
+
+  const response = await fetch(`${API_URL}/auth/microsoft/url?${searchParams.toString()}`);
+  return handleResponse(response);
+}
+
+export async function exchangeMicrosoftCode({ code, redirectUri }) {
+  const response = await fetch(`${API_URL}/auth/microsoft/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, redirectUri }),
+  });
+  return handleResponse(response);
+}
+
+export async function getUserProfile() {
+  const response = await fetch(`${API_URL}/users/profile`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function updateUserProfile(payload) {
+  const response = await fetch(`${API_URL}/users/profile`, {
+    method: 'PATCH',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function getPublicSellerProfile(userId) {
+  const response = await fetch(`${API_URL}/users/public/${encodeURIComponent(userId)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function getMyReceivedReviews() {
+  const response = await fetch(`${API_URL}/reviews/mine`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
 export async function becomeSeller() {
   const response = await fetch(`${API_URL}/auth/become-seller`, {
     method: 'POST',
@@ -83,6 +140,39 @@ export async function getMarketplaceProducts(params = {}) {
   if (maxPrice !== '') searchParams.set('maxPrice', String(maxPrice));
 
   const response = await fetch(`${API_URL}${path}?${searchParams.toString()}`);
+  return handleResponse(response);
+}
+
+export async function getMyProducts() {
+  const response = await fetch(`${API_URL}/products/mine`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function publishProduct(payload) {
+  const response = await fetch(`${API_URL}/products`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function updateMyProduct(productId, payload) {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function deleteMyProduct(productId) {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
   return handleResponse(response);
 }
 
@@ -171,23 +261,139 @@ export async function getOrderById(id) {
   return handleResponse(response);
 }
 
-export async function getMessageThreads() {
-  const response = await fetch(`${API_URL}/messages/threads`, {
+export async function getSellerDashboard() {
+  const response = await fetch(`${API_URL}/seller/dashboard`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
 }
 
-export async function getMessageThread(productId) {
-  const response = await fetch(`${API_URL}/messages/threads/${productId}`, {
+export async function getSellerOrders() {
+  const response = await fetch(`${API_URL}/seller/orders`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
 }
 
-export async function sendMessage(productId, payload) {
-  const response = await fetch(`${API_URL}/messages/threads/${productId}/messages`, {
+export async function updateSellerOrderStatus(orderId, status) {
+  const response = await fetch(`${API_URL}/seller/orders/${orderId}/status`, {
+    method: 'PATCH',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ status }),
+  });
+  return handleResponse(response);
+}
+
+export async function getConversations(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.q?.trim()) searchParams.set('q', params.q.trim());
+
+  const response = await fetch(`${API_URL}/conversations${searchParams.toString() ? `?${searchParams.toString()}` : ''}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function createConversation(payload) {
+  const response = await fetch(`${API_URL}/conversations`, {
     method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function sendConversationMessage(conversationId, payload) {
+  const response = await fetch(`${API_URL}/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function getNotifications() {
+  const response = await fetch(`${API_URL}/notifications`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function markAllNotificationsRead() {
+  const response = await fetch(`${API_URL}/notifications/read-all`, {
+    method: 'PATCH',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({}),
+  });
+  return handleResponse(response);
+}
+
+export async function submitOrderReview(orderId, payload) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/review`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function submitReport(payload) {
+  const response = await fetch(`${API_URL}/reports`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function getAdminDashboard() {
+  const response = await fetch(`${API_URL}/admin/dashboard`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function getAdminUsers() {
+  const response = await fetch(`${API_URL}/admin/users`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function updateAdminUserSuspension(userId, payload) {
+  const response = await fetch(`${API_URL}/admin/users/${userId}/suspension`, {
+    method: 'PATCH',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function getAdminProducts() {
+  const response = await fetch(`${API_URL}/admin/products`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function deleteAdminProduct(productId) {
+  const response = await fetch(`${API_URL}/admin/products/${productId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function getAdminReports() {
+  const response = await fetch(`${API_URL}/admin/reports`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function updateAdminReport(reportId, payload) {
+  const response = await fetch(`${API_URL}/admin/reports/${reportId}`, {
+    method: 'PATCH',
     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   });
